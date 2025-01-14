@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.tl</groupId>
-	<artifactId>reap-admin-api</artifactId>
+	<artifactId>openlms_admin_api</artifactId>
 	<version>1</version>
 	<name>reap-admin-api</name>
 	<description>Demo project for Spring Boot</description>
