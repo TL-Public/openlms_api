@@ -1,6 +1,7 @@
 # openlms_api
 ![Java](https://img.shields.io/badge/java-17+-blue.svg)
 ![Spring Boot](https://img.shields.io/badge/spring--boot-3.x-brightgreen)
+![PostgresSQL]
 
 This repository contains the source code for a lightweight, scalable, and modular microservice application built using [Spring Boot](https://spring.io/projects/spring-boot). 
 
