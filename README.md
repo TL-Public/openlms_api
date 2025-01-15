@@ -1,6 +1,4 @@
 # openlms_api
-# Spring Boot Microservice Application
-
 ![Java](https://img.shields.io/badge/java-17+-blue.svg)
 ![Spring Boot](https://img.shields.io/badge/spring--boot-3.x-brightgreen)
 
