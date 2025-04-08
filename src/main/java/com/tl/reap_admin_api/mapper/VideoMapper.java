@@ -110,27 +110,24 @@ public class VideoMapper {
 
     public Video updateEntityFromDto(Video video, VideoDto dto) {
         if (dto == null) {
-            return null;
+            return video;
         }
 
         if(dto.getName() != null) video.setName(dto.getName());
         if(dto.getDescription() != null) video.setDescription(dto.getDescription());
         if(dto.getThumbnail() != null) video.setThumbnail(dto.getThumbnail());
         if(dto.getDuration() != null) video.setDuration(dto.getDuration());
-        if (dto.getStatus() != null) {
-            video.setStatus(dto.getStatus());
-        }
+        if(dto.getExtId() != null) video.setExtId(dto.getExtId());
+        if(dto.getUrl() != null) video.setUrl(dto.getUrl());
+        if(dto.getStatus() != null) video.setStatus(dto.getStatus());
         
-        if(dto.getLanguageCode() != null)  {
+        if(dto.getLanguageCode() != null) {
             Language language = languageService.getLanguageByCode(dto.getLanguageCode());
             if (language == null) {
                 throw new LanguageNotFoundException("Language not found with code: " + dto.getLanguageCode());
             }
             video.setLanguage(language);
         }
-        video.setStatus(dto.getStatus() == null ? 1 : dto.getStatus());
-
-        // Note: Chapters should be set in the service layer
 
         return video;
     }

@@ -37,9 +37,9 @@ public class TestimonialDao {
 	}
 
 	public List<Testimonial> findAll() {
-		TypedQuery<Testimonial> query = entityManager
-				.createQuery("SELECT DISTINCT t FROM Testimonial t LEFT JOIN FETCH t.translations", Testimonial.class);
-		return query.getResultList();
+	    TypedQuery<Testimonial> query = entityManager
+	            .createQuery("SELECT DISTINCT t FROM Testimonial t LEFT JOIN FETCH t.translations ORDER BY t.orderNo", Testimonial.class);
+	    return query.getResultList();
 	}
 
 	public void delete(Testimonial testimonial) {
@@ -57,4 +57,12 @@ public class TestimonialDao {
 		List<Language> results = query.getResultList();
 		return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
 	}
+	
+	public Optional<Testimonial> findByorderNo(Integer orderNo) {
+        TypedQuery<Testimonial> query = entityManager.createQuery(
+                "SELECT t FROM Testimonial t WHERE t.orderNo = :orderNo", Testimonial.class);
+        query.setParameter("orderNo", orderNo);
+        List<Testimonial> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
 }

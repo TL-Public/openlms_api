@@ -87,6 +87,20 @@ public class TraineeRsetiDao {
         }
     }
 
+    public TraineeRseti findByTraineeProfileUuidInRseti(UUID rsetiUuid, UUID traineeUuid) {
+        try {
+            return entityManager.createQuery(
+                "SELECT tr FROM TraineeRseti tr WHERE tr.rseti.uuid = :rsetiUuid AND tr.traineeProfile.uuid = :traineeUuid and tr.rsetiCourse.uuid IS NULL", TraineeRseti.class)
+                .setParameter("rsetiUuid", rsetiUuid)
+                .setParameter("traineeUuid", traineeUuid)
+                .getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
+
+    
+
     public List<TraineeRseti> findByRsetiCourseUuid(UUID rsetiCourseUuid) {
         return entityManager.createQuery(
             "SELECT tr FROM TraineeRseti tr WHERE tr.rsetiCourse.uuid = :rsetiCourseUuid", TraineeRseti.class)

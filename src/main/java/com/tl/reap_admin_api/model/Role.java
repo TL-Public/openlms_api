@@ -1,6 +1,7 @@
 package com.tl.reap_admin_api.model;
 
 public enum Role {
+    PUBLIC(0),
     SUPER_ADMIN(1),
     NAR_ADMIN(2),
     NAR_STAFF(3),

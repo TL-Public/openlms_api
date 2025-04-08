@@ -1,5 +1,7 @@
 package com.tl.reap_admin_api.dao;
 
+import com.tl.reap_admin_api.dto.LanguageCountDto;
+import com.tl.reap_admin_api.model.Language;
 import com.tl.reap_admin_api.model.Video;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 public class VideoDao {
@@ -40,6 +43,14 @@ public class VideoDao {
         TypedQuery<Video> query = entityManager.createQuery(
             "SELECT DISTINCT v FROM Video v LEFT JOIN FETCH v.chapterVideos cv " +
             "LEFT JOIN FETCH cv.chapter c LEFT JOIN FETCH c.course WHERE v.uuid = :uuid", Video.class);
+        query.setParameter("uuid", uuid);
+        List<Video> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    public Optional<Video> findByUuidWithPlaylists(UUID uuid) {
+        TypedQuery<Video> query = entityManager.createQuery(
+            "SELECT DISTINCT v FROM Video v LEFT JOIN FETCH v.playlists WHERE v.uuid = :uuid", Video.class);
         query.setParameter("uuid", uuid);
         List<Video> results = query.getResultList();
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
@@ -170,5 +181,29 @@ public class VideoDao {
 
     public void delete(Video video) {
         entityManager.remove(entityManager.contains(video) ? video : entityManager.merge(video));
+    }
+    
+    
+
+    public List<Object[]> countVideosByLanguage(String courseName, String courseCode, String videoTitle, UUID courseUuid) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Object[]> query = cb.createQuery(Object[].class);
+        Root<Video> video = query.from(Video.class);
+        
+        // Join with Language entity
+        Join<Video, Language> languageJoin = video.join("language", JoinType.LEFT);
+
+        // Apply the same filters as in findAllFiltered
+        Predicate orPredicate = createPredicates(cb, query, video, courseName, courseCode, videoTitle, courseUuid);
+
+        // Group by language code and count
+        query.multiselect(
+            languageJoin.get("code"), 
+            cb.countDistinct(video.get("id"))
+        );
+        query.groupBy(languageJoin.get("code"));
+        query.where(orPredicate);
+
+        return entityManager.createQuery(query).getResultList();
     }
 }

@@ -29,9 +29,11 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
 
 import com.tl.reap_admin_api.dao.CourseDao;
 import com.tl.reap_admin_api.dao.RsetiCourseDao;
@@ -43,7 +45,9 @@ import com.tl.reap_admin_api.exception.RsetiNotFoundException;
 import com.tl.reap_admin_api.mapper.RsetiCourseMapper;
 import com.tl.reap_admin_api.model.Course;
 import com.tl.reap_admin_api.model.RSETI;
+import com.tl.reap_admin_api.model.Role;
 import com.tl.reap_admin_api.model.RsetiCourse;
+import com.tl.reap_admin_api.model.User;
 
 @Service
 public class RsetiCourseService {
@@ -73,13 +77,19 @@ public class RsetiCourseService {
 	}
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public List<RsetiCourseDto> addCoursesToRseti(UUID rsetiUuid, List<RsetiCourseDto> rsetiCourseDtos) {
 		
 		List<RsetiCourse> addedCourses = new ArrayList<>();
-		 RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
+		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
 			        .orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
+		rseti.setCreatedAt(ZonedDateTime.now());
+		rseti.setUpdatedAt(ZonedDateTime.now());
+        User currentUser = userService.getCurrentUser();
+        rseti.setCreatedBy(currentUser.getUsername());
+        rseti.setUpdatedBy(currentUser.getUsername());
 
+		checkPermission(rseti); 
 
 		for (RsetiCourseDto dto : rsetiCourseDtos) {
 			RsetiCourse rsetiCourse = rsetiCourseMapper.toEntity(dto);
@@ -105,16 +115,26 @@ public class RsetiCourseService {
 	public List<RsetiCourseDto> getCoursesInRseti(UUID rsetiUuid) {
 		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
 				.orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
-
+				
+		checkPermission(rseti);  // Checks whether the logged in user has read permission to this rseti. Lese throws access denied exceptio
+		
 		List<RsetiCourse> rsetiCourses = rsetiCourseDao.findByRseti(rseti);
 		return rsetiCourseMapper.toDtoList(rsetiCourses);
 	}
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public List<RsetiCourseDto> updateCoursesInRseti(UUID rsetiUuid, List<RsetiCourseDto> courseDtos) {
 		
 		List<RsetiCourse> updatedCourses = new ArrayList<>();
+		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
+				.orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
+		 User currentUser = userService.getCurrentUser();
+		 rseti.setUpdatedBy(currentUser.getUsername());
+		 rseti.setUpdatedAt(ZonedDateTime.now());
+				
+		checkPermission(rseti);  // Checks whether the logged in user has read permission to this rseti. Lese throws access denied exceptio
+		
 
 		for (RsetiCourseDto dto : courseDtos) {
 			RsetiCourse rsetiCourse = rsetiCourseDao.findByRsetiUuidAndCourseUuid(rsetiUuid, dto.getCourseUuid()).orElseThrow(
@@ -134,8 +154,16 @@ public class RsetiCourseService {
 	}
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public void deleteCourseFromRseti(UUID rsetiUuid, UUID courseUuid) {
+		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
+				.orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
+		 User currentUser = userService.getCurrentUser();
+		 rseti.setUpdatedBy(currentUser.getUsername());
+		 rseti.setUpdatedAt(ZonedDateTime.now());
+				
+		checkPermission(rseti);  // Checks whether the logged in user has read permission to this rseti. Lese throws access denied exceptio
+		
 		RsetiCourse rsetiCourse = rsetiCourseDao.findByRsetiUuidAndCourseUuid(rsetiUuid,courseUuid).orElseThrow(
 					() -> new CourseNotFoundException("Course not found with UUID: " +courseUuid 
 					+ "for rseti with UUID: " + rsetiUuid ));
@@ -144,7 +172,7 @@ public class RsetiCourseService {
 	}
 
 	@Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public JSONObject  bulkUploadRsetiCourses(MultipartFile file) throws IOException {
 		
 		JSONObject respObj = new JSONObject();
@@ -365,8 +393,16 @@ public class RsetiCourseService {
 
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public void deleteRsetiCourse(UUID rsetiUuid, UUID rsetiCourseUuid) {
+		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
+				.orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
+		rseti.setUpdatedAt(ZonedDateTime.now());
+        User currentUser = userService.getCurrentUser();
+        rseti.setUpdatedBy(currentUser.getUsername());
+				
+		checkPermission(rseti);  // Checks whether the logged in user has read permission to this rseti. Lese throws access denied exceptio
+		
 		RsetiCourse rsetiCourse = rsetiCourseDao.findByRsetiUuidAndUuid(rsetiUuid, rsetiCourseUuid)
 				.orElseThrow(() -> new CourseNotFoundException(
 						"RSETI Course not found with UUID: " + rsetiCourseUuid + " for RSETI with UUID: " + rsetiUuid));
@@ -375,8 +411,13 @@ public class RsetiCourseService {
 	}
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public RsetiCourseDto editRsetiCourse(UUID rsetiUuid, UUID rsetiCourseUuid, RsetiCourseDto rsetiCourseDto) {
+		RSETI rseti = rsetiDao.findByUuid(rsetiUuid)
+				.orElseThrow(() -> new RsetiNotFoundException("RSETI not found with UUID: " + rsetiUuid));
+				
+		checkPermission(rseti);  // Checks whether the logged in user has read permission to this rseti. Lese throws access denied exceptio
+		
 		RsetiCourse rsetiCourse = rsetiCourseDao.findByRsetiUuidAndUuid(rsetiUuid, rsetiCourseUuid)
 				.orElseThrow(() -> new CourseNotFoundException(
 						"RSETI Course not found with UUID: " + rsetiCourseUuid + " for RSETI with UUID: " + rsetiUuid));
@@ -395,4 +436,33 @@ public class RsetiCourseService {
 		RsetiCourse updatedRsetiCourse = rsetiCourseDao.save(rsetiCourse);
 		return rsetiCourseMapper.toDto(updatedRsetiCourse);
 	}
+
+	private void checkPermission(RSETI rseti) {
+        User currentUser = userService.getCurrentUser();
+        Role userRole = currentUser.getRole();
+
+		System.out.println("User Role - " + userRole.getNumber() + " rseti - " + rseti.getUuid());
+        switch (userRole) {
+			case PUBLIC:
+            case SUPER_ADMIN:
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                // These roles have access to all RSETIs
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                if (!rseti.getStateId().equals(currentUser.getUserProfile().getState().getExtId())) {
+                    throw new AccessDeniedException("You don't have permission to access this RSETI Course");
+                }
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:
+                if (!rseti.getUuid().equals(currentUser.getUserProfile().getRseti().getUuid())) {
+                    throw new AccessDeniedException("You don't have permission to access this RSETI Course");
+                }
+                break;
+            default:
+                throw new AccessDeniedException("You don't have permission to access RSETI Course data");
+        }
+    }
 }

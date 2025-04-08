@@ -31,6 +31,7 @@ import com.tl.reap_admin_api.model.FAQTranslation;
 import com.tl.reap_admin_api.model.Language;
 import com.tl.reap_admin_api.model.User;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -57,7 +58,7 @@ public class FAQService {
     private static final String DEFAULT_LANGUAGE_CODE = "en";
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public FAQDto createFAQ(FAQDto dto) {
         FAQ faq = new FAQ();
         FAQCategory category = faqCategoryDao.findByExtIdAndLanguageCode(dto.getCategoryId(), DEFAULT_LANGUAGE_CODE)
@@ -66,6 +67,8 @@ public class FAQService {
         User currentUser = userService.getCurrentUser();
         faq.setCreatedBy(currentUser.getUsername());
         faq.setUpdatedBy(currentUser.getUsername());
+        faq.setCreatedAt(ZonedDateTime.now());
+        faq.setUpdatedAt(ZonedDateTime.now());
         updateTranslations(faq, dto.getTranslations());
         faq = faqDao.save(faq);
         return mapper.toDto(faq);
@@ -86,7 +89,7 @@ public class FAQService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public FAQDto updateFAQ(UUID uuid, FAQDto dto) {
         FAQ faq = faqDao.findByUuid(uuid)
                 .orElseThrow(() -> new RuntimeException("FAQ not found"));
@@ -94,9 +97,9 @@ public class FAQService {
         FAQCategory category = faqCategoryDao.findByExtIdAndLanguageCode(dto.getCategoryId(), DEFAULT_LANGUAGE_CODE)
                 .orElseThrow(() -> new RuntimeException("Category not found with ext id: " + dto.getCategoryId() +" and language code " + DEFAULT_LANGUAGE_CODE));
         faq.setCategory(category);
-        faq.setUpdatedAt(ZonedDateTime.now());
         User currentUser = userService.getCurrentUser();
         faq.setUpdatedBy(currentUser.getUsername());
+        faq.setUpdatedAt(ZonedDateTime.now());
         updateTranslations(faq, dto.getTranslations());
 
         faq = faqDao.save(faq);
@@ -120,13 +123,19 @@ public class FAQService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteFAQ(UUID uuid) {
+    	FAQ faq = faqDao.findByUuid(uuid).orElseThrow(() -> new EntityNotFoundException("FAQ not found"));
+    	 User currentUser = userService.getCurrentUser();
+         faq.setUpdatedBy(currentUser.getUsername());
+         faq.setUpdatedAt(ZonedDateTime.now());
+         faqDao.save(faq);
         faqDao.deleteByUuid(uuid);
     }
 
 
     @Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public String bulkUploadFAQs(MultipartFile file) throws IOException {
         List<Map<String, Object>> errorRows = new ArrayList<>();
         Map<String, FAQCategory> categoryCache = new HashMap<>();

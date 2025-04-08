@@ -1,6 +1,7 @@
 package com.tl.reap_admin_api.model;
 
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,6 +12,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
@@ -155,7 +157,23 @@ public class TraineeProfile {
 
 	    @Column(name = "mnrega_card_no")
 	    private String mnergaCardNo;
+	    
+	    @Column(name = "created_at", updatable = false)
+	    private ZonedDateTime createdAt;
 
+	    @Column(name = "updated_at")
+	    private ZonedDateTime updatedAt;
+
+	    @Column(name = "created_by",  updatable = false)
+	    private String createdBy;
+
+	    @Column(name = "updated_by")
+	    private String updatedBy;
+	    
+	    public TraineeProfile() {
+	    	 this.createdAt = ZonedDateTime.now();
+	         this.updatedAt = ZonedDateTime.now();
+	    }
 	    // Getters and setters
 
 	  
@@ -553,4 +571,40 @@ public class TraineeProfile {
     public void setTraineeRsetis(List<TraineeRseti> traineeRsetis) {
         this.traineeRsetis = traineeRsetis;
     }
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+    
+    
+
+	
 }

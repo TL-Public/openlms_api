@@ -46,7 +46,7 @@ public class Video {
     @OrderBy("orderNumber ASC")
     private Set<ChapterVideo> chapterVideos = new HashSet<>();
 
-    @ManyToMany(mappedBy = "videos")
+    @ManyToMany(mappedBy = "videos",  cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private Set<Playlist> playlists = new HashSet<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,8 +33,14 @@ public class FAQController {
 
     @PostMapping
     public ResponseEntity<FAQDto> createFAQ(@RequestBody FAQDto faqDto) {
-        FAQDto createdFAQ = faqService.createFAQ(faqDto);
-        return new ResponseEntity<>(createdFAQ, HttpStatus.CREATED);
+        try {
+           FAQDto createdFAQ = faqService.createFAQ(faqDto);
+            return new ResponseEntity<>(createdFAQ, HttpStatus.CREATED);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/{uuid}")
@@ -48,20 +55,31 @@ public class FAQController {
         return ResponseEntity.ok(faqs);
     }
 
-    @PutMapping("/{uuid}")
+    @PutMapping("/{uuid}")   
     public ResponseEntity<FAQDto> updateFAQ(@PathVariable UUID uuid, @RequestBody FAQDto faqDto) {
-        FAQDto updatedFAQ = faqService.updateFAQ(uuid, faqDto);
-        return ResponseEntity.ok(updatedFAQ);
+        try {
+            FAQDto updatedFAQ = faqService.updateFAQ(uuid, faqDto);
+            return ResponseEntity.ok(updatedFAQ);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
-    @DeleteMapping("/{uuid}")
+    @DeleteMapping("/{uuid}")   
     public ResponseEntity<Void> deleteFAQ(@PathVariable UUID uuid) {
-        faqService.deleteFAQ(uuid);
-        return ResponseEntity.noContent().build();
+        try {
+            faqService.deleteFAQ(uuid);
+            return ResponseEntity.noContent().build();
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
-     @PostMapping("/bulk-upload")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PostMapping("/bulk-upload")   
     public ResponseEntity<?> bulkUploadFAQs(@RequestParam("file") MultipartFile file) {
         try {
             String errorReportUrl = faqService.bulkUploadFAQs(file);
@@ -71,6 +89,8 @@ public class FAQController {
                 response.put("errorReportUrl", errorReportUrl);
             }
             return ResponseEntity.ok(response);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error processing file: " + e.getMessage());
         }

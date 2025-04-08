@@ -4,6 +4,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.tl.reap_admin_api.dao.StateDao;
+import com.tl.reap_admin_api.controller.UserController;
 import com.tl.reap_admin_api.dao.RsetiDao;
 import com.tl.reap_admin_api.dao.UserDao;
 import com.tl.reap_admin_api.dao.UserProfileDao;
@@ -17,13 +18,21 @@ import com.tl.reap_admin_api.util.SecurityUtils;
 import com.tl.reap_admin_api.exception.UserNotFoundException;
 import com.tl.reap_admin_api.mapper.UserMapper;
 import com.tl.reap_admin_api.security.UserPrincipal;
+
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
@@ -51,6 +60,8 @@ public class UserService {
 
     @Value("${aws.s3.crsimg.bucket-url}")
     private String imgBucketUrl;
+    
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
        
 
     @Autowired
@@ -65,14 +76,15 @@ public class UserService {
         this.rsetiDao = rsetiDao;
     }
 
-    @Transactional  
+    @Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")  
     public UserDto createUser(UserDto userDto, String password) {
         User user = new User();
         user.setUsername(userDto.getUsername());
         user.setEmail(userDto.getEmail());
         user.setPassword(passwordEncoder.encode(password));
-        user.setRole(Role.fromNumber(userDto.getRoleId()));
-        user = userDao.save(user);
+        user.setRole(Role.fromNumber(userDto.getRoleId()));    
+        user.setRoleId(userDto.getRoleId());    
 
         UserProfile profile = new UserProfile();
         profile.setUser(user);
@@ -85,22 +97,51 @@ public class UserService {
         profile.setCurrentAddr(userDto.getCurrentAddr()); 
 
         profile.setState(getState(userDto));
-        profile.setRseti(getRseti(userDto));
+        
+        // Set RSETI based on the current user's RSETI if not provided
+        if (userDto.getRsetiId() == null) {
+            User currentUser = getCurrentUser();
+            if (currentUser.getRole() == Role.RSETI_ADMIN || currentUser.getRole() == Role.RSETI_STAFF) {
+                profile.setRseti(currentUser.getUserProfile().getRseti());
+            } else {
+                profile.setRseti(getRseti(userDto));
+            }
+        } else {
+            profile.setRseti(getRseti(userDto));
+        }
         
         profile.setPhotoUrl(userDto.getPhotoUrl());
         profile.setCreatedBy(getCurrentUser().getUsername());
         profile.setUpdatedBy(getCurrentUser().getUsername());
+        // Get the current user using this.getCurrentUser()
+        User currentUser = this.getCurrentUser();
+        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
+
+        user.setUserProfile(profile);
+        checkUserReadPermission(user);
+
+        user = userDao.save(user);
         userProfileDao.save(profile);
 
         return mapUserToDto(user, profile);
     }
 
     @Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public UserDto uploadProfilePic(UUID userUuid, MultipartFile file) throws IOException {
         try {
             User user = userDao.findByUuid(userUuid)
                     .orElseThrow(() -> new RuntimeException("User not found with UUID: " + userUuid));
+            user.setCreatedBy(getCurrentUser().getUsername());
+            user.setUpdatedBy(getCurrentUser().getUsername());
+            // Get the current user using this.getCurrentUser()
+            User currentUser = this.getCurrentUser();
+            user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+            user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
 
+            checkUserReadPermission(user); // check the current user can update
+           
             String key = "userprofile/" + user.getUsername() + ".png";
 
             ObjectMetadata metadata = new ObjectMetadata();
@@ -144,10 +185,13 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")   
     public UserDto getUserByUuid(UUID uuid) {
         User user = userDao.findByUuid(uuid)
         .orElseThrow(() -> new UserNotFoundException("User not found with UUID: " + uuid));
+
+        checkUserReadPermission(user);
+
         UserProfile profile = null;
         Optional<UserProfile> profileOptional = userProfileDao.findByUser(user);
         if(profileOptional.isPresent()) {
@@ -158,7 +202,7 @@ public class UserService {
     }
     
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public UserDto getCurrentUserProfile() {
         User currentUser = getCurrentUser();
        
@@ -173,19 +217,52 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public List<UserDto> getAllUsers() {
-        List<User> users = userDao.findAllWithProfiles();
+        User currentUser = getCurrentUser();
+        List<User> users;
+
+        Integer stateId = null;
+        UUID rsetiId = null;
+
+        switch (currentUser.getRole()) {
+            case SUPER_ADMIN:
+                users = userDao.findUsersWithLowerRoles(Role.PUBLIC, null, null, currentUser.getUuid());
+                break;
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                users = userDao.findUsersWithLowerRoles(currentUser.getRole(), null, null, currentUser.getUuid());
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                stateId = getCurrentUserStateId();
+                users = userDao.findUsersWithLowerRoles(currentUser.getRole(), stateId, null, currentUser.getUuid());
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:
+                rsetiId = getCurrentUserRsetiId();
+                users = userDao.findUsersWithLowerRoles(currentUser.getRole(), null, rsetiId, currentUser.getUuid());
+                break;
+            default:
+                throw new AccessDeniedException("You don't have permission to access User list");
+        }
+
         return users.stream()
-                .map(userMapper::mapUserToDto)
-                .collect(Collectors.toList());
+            .map(userMapper::mapUserToDto)
+            .collect(Collectors.toList());
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public UserDto updateUser(UUID uuid, UserDto userDto) {
         User user = userDao.findByUuid(uuid)
                 .orElseThrow(() -> new UserNotFoundException("User not found with UUID: " + uuid));
+     // Get the current user using this.getCurrentUser()
+        User currentUser = this.getCurrentUser();
+        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
+
+        checkUserReadPermission(user);
         UserProfile profile = null;
         Optional<UserProfile> profileOptional = userProfileDao.findByUser(user);
         if(profileOptional.isPresent()) {
@@ -248,10 +325,16 @@ public class UserService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public void deleteUser(UUID uuid) {
         User user = userDao.findByUuid(uuid)
         .orElseThrow(() -> new UserNotFoundException("User not found with UUID: " + uuid));
+        // Get the current user using this.getCurrentUser()
+        User currentUser = this.getCurrentUser();
+        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
+
+        checkUserReadPermission(user);
         UserProfile profile = null;
         Optional<UserProfile> profileOptional = userProfileDao.findByUser(user);
         if(profileOptional.isPresent()) {
@@ -276,7 +359,9 @@ public class UserService {
     public User getCurrentUser() {
         UserPrincipal userPrincipal = SecurityUtils.getCurrentUser();
         if (userPrincipal == null) {
-            throw new RuntimeException("No authenticated user found");
+            User user = new User();
+            user.setRole(Role.PUBLIC);
+            return user;
         }
 
         Optional<User> optUser = userDao.findByUsername(userPrincipal.getUsername());
@@ -286,6 +371,18 @@ public class UserService {
         return optUser.get();
     }
 
+    public Integer getCurrentUserStateId() {
+        User currentUser = getCurrentUser();
+        // Assuming the User entity has a stateId field
+        return currentUser.getUserProfile().getState().getExtId();
+    }
+
+    public UUID getCurrentUserRsetiId() {
+        User currentUser = getCurrentUser();
+        // Assuming the User entity has a rsetiId field
+        return currentUser.getUserProfile().getRseti().getUuid();
+    }
+
     @Transactional
     public User updateUserProfile(String newEmail) {
         User currentUser = getCurrentUser();
@@ -293,14 +390,60 @@ public class UserService {
         return userDao.save(currentUser);
     }
 
-    @Transactional
+    @Transactional    
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public void resetPassword(UUID uuid, String newPassword) {
         User user = userDao.findByUuid(uuid)
                 .orElseThrow(() -> new UserNotFoundException("User not found with UUID: " + uuid));
+        
+        User currentUser = this.getCurrentUser();
+        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
+
+        checkUserReadPermission(user);
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(ZonedDateTime.now());
         userDao.save(user);
     }
+
+    @Transactional    
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
+    public void resetPassword(JSONObject pwdJson) {
+        if (!pwdJson.has("oldPwd") || !pwdJson.has("newPwd")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing oldPwd or newPwd in the request");
+        }
+        
+        
+        User currentUser = getCurrentUser();
+
+        
+        String oldPwdSupplied = pwdJson.getString("oldPwd");
+        String newPwdSupplied = pwdJson.getString("newPwd");
+
+        System.out.println("newPwdSupplied " + newPwdSupplied);
+      //  String oldPwdEncrypt = passwordEncoder.encode(oldPwdSupplied);
+
+        //System.out.println(oldPwdEncrypt);
+        System.out.println(currentUser.getPassword());
+        if(!passwordEncoder.matches(oldPwdSupplied,currentUser.getPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Old password not correct"); 
+        }
+        
+        
+        currentUser.setPassword(passwordEncoder.encode(newPwdSupplied));
+        currentUser.setUpdatedAt(ZonedDateTime.now());
+        currentUser.setCreatedAt(ZonedDateTime.now());
+     // Ensure user profile exists before updating
+        if (currentUser.getUserProfile() != null) {
+            currentUser.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        }
+        // Set createdBy only if it's null (preserving original creator)
+        if (currentUser.getUserProfile().getCreatedBy() == null) {
+            currentUser.getUserProfile().setCreatedBy(currentUser.getUsername());
+        }
+        userDao.save(currentUser);
+    }
+
 
     private UserDto mapUserToDto(User user, UserProfile profile) {
         UserDto dto = new UserDto();
@@ -324,29 +467,70 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public UserDto getUserByUsername(String username) {
-        User user = userDao.findByUsername(username)
-            .orElseThrow(() -> new UserNotFoundException("User not found with username: " + username));
+        try {
+            User user = userDao.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException("User not found with username: " + username));
 
-        UserProfile profile = null;
-        Optional<UserProfile> profileOptional = userProfileDao.findByUser(user);
-        if(profileOptional.isPresent()) {
-            profile = profileOptional.get();
+            UserProfile profile = userProfileDao.findByUser(user)
+                .orElse(null);
+
+            return userMapper.mapUserToDto(user, profile);
+        } catch (Exception e) {
+            logger.error("Error in getUserByUsername for username: " + username, e);
+            throw e;
         }
-        return mapUserToDto(user, profile);
     }
-
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF')")
     public UserDto getUserByEmail(String email) {
-        User user = userDao.findByEmail(email)
-            .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
-        UserProfile profile = null;
-        Optional<UserProfile> profileOptional = userProfileDao.findByUser(user);
-        if(profileOptional.isPresent()) {
-            profile = profileOptional.get();
+        try {
+            User user = userDao.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
+
+            UserProfile profile = userProfileDao.findByUser(user)
+                .orElse(null);
+
+            return userMapper.mapUserToDto(user, profile);
+        } catch (UserNotFoundException e) {
+            logger.warn("User not found with email: " + email);
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error in getUserByEmail for email: " + email, e);
+            throw e;
         }
-        return mapUserToDto(user, profile);
+    }
+    private void checkUserReadPermission(User user) {
+        User currentUser = getCurrentUser();
+        Role userRole = currentUser.getRole();
+
+        switch (userRole) {
+            case SUPER_ADMIN:
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                // These roles have access to all RSETIs
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                if (user.getUserProfile().getState().getExtId() != currentUser.getUserProfile().getState().getExtId()) {
+                    throw new AccessDeniedException("You don't have permission to access this RSETI");
+                }
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:
+                // Check if the user being created has an RSETI assigned
+                if (user.getUserProfile().getRseti() == null) {
+                    throw new AccessDeniedException("RSETI must be specified for new user");
+                }
+                // Allow RSETI_ADMIN to create users for their own RSETI
+                if (!user.getUserProfile().getRseti().getUuid().equals(currentUser.getUserProfile().getRseti().getUuid())) {
+                    throw new AccessDeniedException("You don't have permission to create users for other RSETIs");
+                }
+                break;
+            case PUBLIC:
+            default:
+                throw new AccessDeniedException("You don't have permission to access RSETI data");
+        }
     }
 }

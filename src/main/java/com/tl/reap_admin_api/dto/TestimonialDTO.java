@@ -9,6 +9,7 @@ public class TestimonialDTO {
 	private String image;
 	private String videoUrl;
     private String videoExtId;
+    private Integer orderNo;
 	private Set<TestimonialTranslationDTO> translations = new HashSet<>();
 
 	// Constructors, getters, and setters
@@ -59,4 +60,15 @@ public class TestimonialDTO {
     public void setVideoExtId(String videoExtId) {
         this.videoExtId = videoExtId;
     }
+
+	public Integer getOrderNo() {
+		return orderNo;
+	}
+
+	public void setOrderNo(Integer orderNo) {
+		this.orderNo = orderNo;
+	}
+
+	
+    
 }

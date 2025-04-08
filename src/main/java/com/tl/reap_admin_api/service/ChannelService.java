@@ -28,7 +28,7 @@ public class ChannelService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public ChannelDto createChannel(ChannelDto channelDto) {
         Channel channel = channelMapper.toEntity(channelDto);
         channel.setUuid(UUID.randomUUID());
@@ -42,7 +42,6 @@ public class ChannelService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public ChannelDto getChannelByUuid(UUID uuid) {
         Channel channel = channelDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChannelNotFoundException("Channel not found with uuid: " + uuid));
@@ -50,7 +49,6 @@ public class ChannelService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public List<ChannelDto> getAllChannels() {
         return channelDao.findAll().stream()
                 .map(channelMapper::toDto)
@@ -58,7 +56,7 @@ public class ChannelService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public ChannelDto updateChannel(UUID uuid, ChannelDto channelDto) {
         Channel existingChannel = channelDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChannelNotFoundException("Channel not found with uuid: " + uuid));
@@ -76,7 +74,7 @@ public class ChannelService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteChannel(UUID uuid) {
         Channel channel = channelDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChannelNotFoundException("Channel not found with uuid: " + uuid));

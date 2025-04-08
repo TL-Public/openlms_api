@@ -2,6 +2,7 @@ package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
 import java.io.Serializable;
+import java.time.ZonedDateTime;
 import java.util.Objects;
 
 
@@ -25,10 +26,25 @@ public class ChapterVideo {
 
     @Column(name = "order_number")
     private Integer orderNumber;
+    
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
 
     // Constructors, getters, and setters
 
-    public ChapterVideo() {}
+    public ChapterVideo() {
+    	 this.createdAt = ZonedDateTime.now();
+         this.updatedAt = ZonedDateTime.now();
+    }
 
     public ChapterVideo(Chapter chapter, Video video, Integer orderNumber) {
         this.chapter = chapter;
@@ -115,6 +131,8 @@ public class ChapterVideo {
         public void setVideoId(Long videoId) {
             this.videoId = videoId;
         }
+        
+        
        
          // equals and hashCode methods
         @Override
@@ -131,6 +149,7 @@ public class ChapterVideo {
             return Objects.hash(chapterId, videoId);
         }
     }
+    
 
     // equals and hashCode methods
 }

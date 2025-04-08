@@ -1,19 +1,26 @@
 package com.tl.reap_admin_api.mapper;
 
+import com.tl.reap_admin_api.dao.TraineeCredentialDao;
 import com.tl.reap_admin_api.dto.TraineeProfileDto;
 import com.tl.reap_admin_api.dto.TraineeRsetiDto;
 import com.tl.reap_admin_api.model.RSETI;
 import com.tl.reap_admin_api.model.RsetiCourse;
+import com.tl.reap_admin_api.model.TraineeCredential;
 import com.tl.reap_admin_api.model.TraineeProfile;
 import com.tl.reap_admin_api.model.TraineeRseti;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TraineeProfileMapper {
+    @Autowired
+    TraineeCredentialDao traineeCredentialDao;
 
     public TraineeProfileDto toDTO(TraineeProfile traineeProfile) {
         if (traineeProfile == null) {
@@ -79,14 +86,20 @@ public class TraineeProfileMapper {
     }
 
     private TraineeRsetiDto mapTraineeRsetiToDto(TraineeRseti traineeRseti) {
+        UUID rsetiCourseUUID = null;
+        UUID courseUUID = null;
+        if(traineeRseti.getRsetiCourse() != null) {
+            rsetiCourseUUID = traineeRseti.getRsetiCourse().getUuid();
+            courseUUID = traineeRseti.getRsetiCourse().getCourse().getUuid();
+        }
         return new TraineeRsetiDto(
             traineeRseti.getUuid(),
             traineeRseti.getEnrollId(),
             traineeRseti.getEnrolledOn(),
             traineeRseti.getRseti().getUuid(),
             traineeRseti.getTraineeProfile().getUuid(),
-            traineeRseti.getRsetiCourse().getUuid(),
-            traineeRseti.getRsetiCourse().getCourse().getUuid(),    
+            rsetiCourseUUID,
+            courseUUID,    
             traineeRseti.getStatus()
         );
     }
@@ -97,14 +110,24 @@ public class TraineeProfileMapper {
             return null;
         }
         TraineeProfile traineeProfile = new TraineeProfile();
-        updateEntityFromDTO(dto, traineeProfile);
-        return traineeProfile;
+        int ret = updateEntityFromDTO(dto, traineeProfile);
+        
+        return (ret == 1) ? traineeProfile : null;
     }
 
-    public void updateEntityFromDTO(TraineeProfileDto dto, TraineeProfile traineeProfile) {
+    public int updateEntityFromDTO(TraineeProfileDto dto, TraineeProfile traineeProfile) {
         if (dto == null || traineeProfile == null) {
-            return;
+            return 0;
         }
+
+        Optional<TraineeCredential> tcOpt = traineeCredentialDao.findByUsername(dto.getUsername());
+        if(tcOpt.isPresent()) {
+            traineeProfile.setTrainee(tcOpt.get());
+        } else {
+            return 0;
+        }
+        
+
         traineeProfile.setUuid(dto.getUuid());
         traineeProfile.setEnrollId(dto.getEnrollId());
         traineeProfile.setEnrolledOn(dto.getEnrolledOn());
@@ -151,13 +174,16 @@ public class TraineeProfileMapper {
         traineeProfile.setFamilyMember(dto.getFamilyMember());
         traineeProfile.setEmail(dto.getEmail());
         traineeProfile.setMnergaCardNo(dto.getMnergaCardNo());
-        traineeProfile.getTrainee().getUsername() ;
+
+       
 
         if (dto.getTraineeRsetis() != null) {
             traineeProfile.setTraineeRsetis(dto.getTraineeRsetis().stream()
                 .map(rsetiDto -> mapDtoToTraineeRseti(rsetiDto, traineeProfile))
                 .collect(Collectors.toList()));
         }
+
+        return 1;
     }
 
     private TraineeRseti mapDtoToTraineeRseti(TraineeRsetiDto dto, TraineeProfile traineeProfile) {

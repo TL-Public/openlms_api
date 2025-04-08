@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -31,10 +32,12 @@ public class VideoController {
         @RequestParam(required = false) String courseUuid,
         Pageable pageable) {
         try {
-
             UUID crsUUID = (courseUuid == null) ? null : UUID.fromString(courseUuid);
-            Page<VideoDto> videos = videoService.getAllVideos(courseName, courseCode, videoTitle, crsUUID, pageable);
-            return ResponseEntity.ok(videos);
+            
+            // Call the updated service method that returns a Map<String, Object>
+            Map<String, Object> response = videoService.getAllVideos(courseName, courseCode, videoTitle, crsUUID, pageable);
+            
+            return ResponseEntity.ok(response);
         } catch (AccessDeniedException e) {
             return new ResponseEntity<>(HttpStatus.FORBIDDEN);
         } catch (Exception e) {
@@ -84,30 +87,6 @@ public class VideoController {
     public ResponseEntity<?> deleteVideo(@PathVariable UUID uuid) {
         try {
             videoService.deleteVideo(uuid);
-            return ResponseEntity.noContent().build();
-        } catch (AccessDeniedException e) {
-            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @DeleteMapping("/kpoint/playlists")
-    public ResponseEntity<?> deleteAllKPointPlaylist() {
-        try {
-            videoService.deleteAllKPointPlaylist();
-            return ResponseEntity.noContent().build();
-        } catch (AccessDeniedException e) {
-            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
-        } catch (Exception e) {
-            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @DeleteMapping("/kpoint/videos")
-    public ResponseEntity<?> deleteAllKPointVideos() {
-        try {
-            videoService.deleteAllKPointVideos();
             return ResponseEntity.noContent().build();
         } catch (AccessDeniedException e) {
             return new ResponseEntity<>(HttpStatus.FORBIDDEN);

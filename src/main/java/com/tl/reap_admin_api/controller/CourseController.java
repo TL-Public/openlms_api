@@ -16,6 +16,8 @@ import com.tl.reap_admin_api.model.CourseTranslation;
 import com.tl.reap_admin_api.model.Language;
 import com.tl.reap_admin_api.service.CourseService;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -114,6 +116,29 @@ public class CourseController {
         try {
             courseService.bulkUploadVideos(file.getInputStream());
             return ResponseEntity.ok("Bulk video upload completed successfully");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Error processing file: " + e.getMessage());
+        } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | 
+                KPAddPlayListToChannelException | KPVideoUploadException | KPPlaylistCreationException | 
+                KPChannleNotFoundException e) {
+            String className = e.getClass().getSimpleName();
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", e.getMessage());
+            response.put("errorCode", exceptionCodeMap.get(className));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Error during bulk upload: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/batch-update/chapters")
+    @Operation(summary = "Bulk upload chapters with translations from Excel file")
+    public ResponseEntity<?> batchUpdateChapters(@RequestParam("file") MultipartFile file) {
+        try {
+            Map<String, Object> result = courseService.processChapterBatchUpdate(file);
+            return ResponseEntity.ok(result);
         } catch (IOException e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body("Error processing file: " + e.getMessage());

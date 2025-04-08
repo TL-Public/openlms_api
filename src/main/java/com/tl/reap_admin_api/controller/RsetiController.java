@@ -131,6 +131,8 @@ public class RsetiController {
 			return ResponseEntity.ok(courses);
 		} catch (RsetiNotFoundException e) {
 			return ResponseEntity.notFound().build();
+		} catch (AccessDeniedException e) {
+			return new ResponseEntity<>(HttpStatus.FORBIDDEN);
 		}
 	}
 

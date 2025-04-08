@@ -115,4 +115,55 @@ public class RsetiDao {
         query.setParameter("extId", extId);
         return query.getSingleResult() > 0;
     }
+
+    @Transactional(readOnly = true)
+    public List<Object[]> findAllWithCourseCountByState(Integer stateId) {
+        String jpql = "SELECT r, COUNT(rc), rt " +
+                      "FROM RSETI r " +
+                      "LEFT JOIN r.rsetiCourses rc " +
+                      "LEFT JOIN r.translations rt " +
+                      "WHERE r.stateId = :stateId " +
+                      "GROUP BY r, rt";
+        
+        TypedQuery<Object[]> query = entityManager.createQuery(jpql, Object[].class);
+        query.setParameter("stateId", stateId);
+        
+        return query.getResultList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Object[]> findAllWithCourseCountByRseti(UUID rsetiId) {
+        String jpql = "SELECT r, COUNT(rc), rt " +
+                      "FROM RSETI r " +
+                      "LEFT JOIN r.rsetiCourses rc " +
+                      "LEFT JOIN r.translations rt " +
+                      "WHERE r.uuid = :rsetiId " +
+                      "GROUP BY r, rt";
+        
+        TypedQuery<Object[]> query = entityManager.createQuery(jpql, Object[].class);
+        query.setParameter("rsetiId", rsetiId);
+        
+        return query.getResultList();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<RSETI> findByUuidAndState(UUID uuid, Integer stateId) {
+        TypedQuery<RSETI> query = entityManager.createQuery(
+            "SELECT r FROM RSETI r LEFT JOIN FETCH r.translations WHERE r.uuid = :uuid AND r.stateId = :stateId", RSETI.class);
+        query.setParameter("uuid", uuid);
+        query.setParameter("stateId", stateId);
+        List<RSETI> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<RSETI> findByUuidAndRseti(UUID uuid, UUID rsetiId) {
+        TypedQuery<RSETI> query = entityManager.createQuery(
+            "SELECT r FROM RSETI r LEFT JOIN FETCH r.translations WHERE r.uuid = :uuid AND r.uuid = :rsetiId", RSETI.class);
+        query.setParameter("uuid", uuid);
+        query.setParameter("rsetiId", rsetiId);
+        List<RSETI> results = query.getResultList();
+        return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
+    }
+
 }

@@ -35,6 +35,9 @@ public class Testimonial {
 
     @Column(name = "video_extid")
     private String videoExtId;
+    
+    @Column(name = "order_no")
+    private Integer orderNo;
 
 	@Column(name = "created_at", nullable = false)
 	private ZonedDateTime createdAt;
@@ -160,6 +163,16 @@ public class Testimonial {
     public void setVideoExtId(String videoExtId) {
         this.videoExtId = videoExtId;
     }
+
+	public Integer getOrderNo() {
+		return orderNo;
+	}
+
+	public void setOrderNo(Integer orderNo) {
+		this.orderNo = orderNo;
+	}
+
+	
 	
 	
 

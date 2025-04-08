@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.tl.reap_admin_api.model.TraineeProfile;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 
@@ -23,6 +24,27 @@ public class TraineeProfileDao {
 		TypedQuery<TraineeProfile> query = entityManager.createQuery("SELECT t FROM TraineeProfile t",
 				TraineeProfile.class);
 		return query.getResultList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<TraineeProfile> findAllByStateId(Integer stateId) {
+		String queryStr = "SELECT tp FROM TraineeProfile tp WHERE tp.id IN " +
+                  "(SELECT DISTINCT tr.traineeProfile.id FROM TraineeRseti tr WHERE tr.rseti.id IN "+
+				 	 "(SELECT DISTINCT id from RSETI r where r.stateId = :stateId ))";
+		TypedQuery<TraineeProfile> query = entityManager.createQuery(queryStr, TraineeProfile.class);
+		query.setParameter("stateId", stateId);
+		return query.getResultList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<TraineeProfile> findAllByRsetiId(UUID rsetiUuid) {
+		String queryStr = "SELECT tp FROM TraineeProfile tp WHERE tp.id IN " +
+                  "(SELECT DISTINCT tr.traineeProfile.id FROM TraineeRseti tr WHERE tr.rseti.id = "+
+				  "(select id from RSETI where uuid = :rsetiUuid))";
+		TypedQuery<TraineeProfile> query = entityManager.createQuery(queryStr, TraineeProfile.class);
+		query.setParameter("rsetiUuid", rsetiUuid);
+		return query.getResultList();
+
 	}
 
 	@Transactional(readOnly = true)
@@ -61,4 +83,16 @@ public class TraineeProfileDao {
 					entityManager.contains(traineeProfile) ? traineeProfile : entityManager.merge(traineeProfile));
 		}
 	}
+
+	@Transactional(readOnly = true)
+    public TraineeProfile findByEnrollId(String enrollId) {
+        try {
+            TypedQuery<TraineeProfile> query = entityManager.createQuery(
+                "SELECT tp FROM TraineeProfile tp WHERE tp.enrollId = :enrollId", TraineeProfile.class);
+            query.setParameter("enrollId", enrollId);
+            return query.getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
+    }
 }

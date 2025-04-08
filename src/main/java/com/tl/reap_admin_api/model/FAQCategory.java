@@ -1,5 +1,7 @@
 package com.tl.reap_admin_api.model;
 
+import java.time.ZonedDateTime;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -20,7 +22,22 @@ public class FAQCategory {
     @Column(name = "language_code", nullable = false)
     private String languageCode;
     
-    public FAQCategory() {}
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+    
+    public FAQCategory() {
+    	 this.createdAt = ZonedDateTime.now();
+         this.updatedAt = ZonedDateTime.now();
+    }
 
     public FAQCategory(String category, Integer extId, String languageCode) {
         this.category = category;
@@ -61,4 +78,38 @@ public class FAQCategory {
     public void setLanguageCode(String languageCode) {
         this.languageCode = languageCode;
     }
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+    
+    
 }

@@ -39,7 +39,7 @@ public class ChapterService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public ChapterDto createChapter(ChapterDto chapterDto) {
         Chapter chapter = chapterMapper.toEntity(chapterDto);
         CourseDto courseDto = courseService.getCourseByUuid(chapterDto.getCourseUuid());
@@ -50,15 +50,13 @@ public class ChapterService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
-    public List<ChapterDto> getAllChapters() {
+     public List<ChapterDto> getAllChapters() {
         return chapterDao.findAll().stream()
                 .map(chapterMapper::toDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public ChapterDto getChapterByUuid(UUID uuid) {
         Chapter chapter = chapterDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChapterNotFoundException("Chapter not found with uuid: " + uuid));
@@ -66,7 +64,7 @@ public class ChapterService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public ChapterDto updateChapter(UUID uuid, ChapterDto chapterDto) {
         Chapter existingChapter = chapterDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChapterNotFoundException("Chapter not found with uuid: " + uuid));
@@ -103,7 +101,7 @@ public class ChapterService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteChapter(UUID uuid) {
         Chapter chapter = chapterDao.findByUuid(uuid)
                 .orElseThrow(() -> new ChapterNotFoundException("Chapter not found with uuid: " + uuid));
@@ -111,7 +109,6 @@ public class ChapterService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public List<ChapterDto> getChaptersByCourseId(UUID courseId) {
         return chapterDao.findByCourseId(courseId).stream()
                 .map(chapterMapper::toDto)

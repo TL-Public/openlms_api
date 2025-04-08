@@ -1,6 +1,8 @@
 package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
+
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,8 +30,23 @@ public class State {
     @OneToMany(mappedBy = "state", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<District> districts = new ArrayList<>();
     
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+    
     // Default constructor
-    public State() {}
+    public State() {
+    	 this.createdAt = ZonedDateTime.now();
+         this.updatedAt = ZonedDateTime.now();
+    }
 
     // Constructor with name, extId, and languageCode
     public State(String name, Integer extId, String languageCode) {
@@ -99,5 +116,39 @@ public class State {
         districts.remove(district);
         district.setState(null);
     }
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+    
+    
 }
 

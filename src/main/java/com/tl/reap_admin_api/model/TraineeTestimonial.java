@@ -1,6 +1,8 @@
 package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
+
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -21,11 +23,30 @@ public class TraineeTestimonial {
 
 	@OneToMany(mappedBy = "traineeTestimonial", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<TraineeTestimonialTranslation> translations = new ArrayList<>();
+	
+
+	@Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
 
 	// Constructors
-	public TraineeTestimonial() {
-		this.uuid = UUID.randomUUID();
-	}
+
+	
+
+    public TraineeTestimonial() {
+        this.uuid = UUID.randomUUID();
+        this.createdAt = ZonedDateTime.now();
+        this.updatedAt = ZonedDateTime.now();
+    }
+
 
 	public TraineeTestimonial(Course course) {
 		this();
@@ -75,4 +96,38 @@ public class TraineeTestimonial {
 		translations.remove(translation);
 		translation.setTraineeTestimonial(null);
 	}
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+	
+	
 }

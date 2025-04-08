@@ -1,5 +1,6 @@
 package com.tl.reap_admin_api.dao;
 
+import com.tl.reap_admin_api.model.Role;
 import com.tl.reap_admin_api.model.User;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -77,4 +78,51 @@ public class UserDao {
             "SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userProfile where u.role!='SUPER_ADMIN'", User.class);
         return query.getResultList();
     }
+
+    public List<User> findAllWithProfilesByStateId(Integer stateId) {
+        String queryStr = "SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userProfile" +
+                        " where (u.role NOT IN ('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')) AND" +
+                        "  u.userProfile.state.extId = :stateId";
+        TypedQuery<User> query = entityManager.createQuery(queryStr, User.class);
+        query.setParameter("stateId", stateId);           
+        return query.getResultList();
+    }
+
+    public List<User> findAllWithProfilesByRseti(UUID rsetiId) {
+        String queryStr = "SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userProfile" +
+                        " where (u.role NOT IN ('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF')) AND" +
+                        "  u.userProfile.rseti.uuid = :rsetiId";
+        TypedQuery<User> query = entityManager.createQuery(queryStr, User.class);
+        query.setParameter("rsetiId", rsetiId);           
+        return query.getResultList();
+    }
+    
+    public List<User> findUsersWithLowerRoles(Role role, Integer stateId, UUID rsetiId, UUID userId) {
+     
+        String queryStr = "SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userProfile WHERE u.roleId > :role" + 
+                            " AND u.uuid != :userId order by u.roleId ASC";
+        
+        if (stateId != null) {
+            queryStr += " AND u.userProfile.state.extId = :stateId";
+        }
+        
+        if (rsetiId != null) {
+            queryStr += " AND u.userProfile.rseti.uuid = :rsetiId";
+        }
+        
+        TypedQuery<User> query = entityManager.createQuery(queryStr, User.class);
+        query.setParameter("role", role.getNumber());
+        query.setParameter("userId", userId);
+        
+        if (stateId != null) {
+            query.setParameter("stateId", stateId);
+        }
+        
+        if (rsetiId != null) {
+            query.setParameter("rsetiId", rsetiId);
+        }
+        
+        return query.getResultList();
+    }
+
 }

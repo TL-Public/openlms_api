@@ -23,6 +23,7 @@ public class TestimonialMapper {
 		dto.setImage(testimonial.getImage());
 		dto.setVideoUrl(testimonial.getVideoUrl());
         dto.setVideoExtId(testimonial.getVideoExtId());
+        dto.setOrderNo(testimonial.getOrderNo());
 
 		if (testimonial.getTranslations() != null) {
 			dto.setTranslations(testimonial.getTranslations().stream().map(this::toDTO).collect(Collectors.toSet()));
@@ -61,6 +62,7 @@ public class TestimonialMapper {
 		testimonial.setImage(dto.getImage());
 		testimonial.setVideoUrl(dto.getVideoUrl());
         testimonial.setVideoExtId(dto.getVideoExtId());
+        testimonial.setOrderNo(dto.getOrderNo());
 
 		if (dto.getTranslations() != null) {
 			testimonial.setTranslations(dto.getTranslations().stream().map(this::toEntity).collect(Collectors.toSet()));

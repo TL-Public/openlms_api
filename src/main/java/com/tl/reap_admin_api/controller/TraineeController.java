@@ -30,21 +30,13 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.AccessDeniedException;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import java.io.IOException;
-
 import com.tl.reap_admin_api.service.TraineeCredentialService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/apis/v1/trainees")
@@ -188,8 +180,65 @@ public class TraineeController {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    
+    @DeleteMapping("/{uuid}")
+    public ResponseEntity<?> deleteTrainee(@PathVariable UUID uuid) {
+        try {
+            traineeService.deleteTrainee(uuid);
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        } catch (AccessDeniedException e) {
+            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+        } catch (TraineeNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", e.getMessage());
+            response.put("errorCode", exceptionCodeMap.get("TraineeNotFoundException"));
+            return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
-
+    
+    @PutMapping("/{uuid}/reset-password")
+    public ResponseEntity<?> resetTraineePassword(@PathVariable UUID uuid, @RequestBody Map<String, String> passwordMap) {
+        try {
+            String newPassword = passwordMap.get("newPassword");
+            if (newPassword == null || newPassword.isEmpty()) {
+                return ResponseEntity.badRequest().body("New password is required");
+            }
+            traineeService.resetTraineePasswordByProfileUuid(uuid, newPassword);
+            return ResponseEntity.ok().body("Password reset successfully");
+        } catch (TraineeNotFoundException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", e.getMessage());
+            response.put("errorCode", exceptionCodeMap.get("TraineeNotFoundException"));
+            return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred");
+        }
+    }
+    
+    
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody String passwordJson) {
+        try {
+            JSONObject jsonObject = new JSONObject(passwordJson);
+            traineeService.resetPassword(jsonObject);
+            return ResponseEntity.ok().body("Password reset successfully");
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied: " + e.getMessage());
+        } catch (TraineeNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Trainee not found: " + e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid request: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
+        }
+    }
 
 }
 

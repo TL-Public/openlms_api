@@ -1,5 +1,6 @@
 package com.tl.reap_admin_api.service;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -16,20 +17,23 @@ import com.tl.reap_admin_api.dao.FAQCategoryDao;
 import com.tl.reap_admin_api.dto.FAQCategoryDto;
 import com.tl.reap_admin_api.mapper.FAQCategoryMapper;
 import com.tl.reap_admin_api.model.FAQCategory;
+import com.tl.reap_admin_api.model.User;
 
 @Service
 public class FAQCategoryService {
 
     private final FAQCategoryDao faqCategoryDAO;
     private final FAQCategoryMapper faqCategoryMapper;
+    private final UserService userService;
 
-    public FAQCategoryService(FAQCategoryDao faqCategoryDAO, FAQCategoryMapper faqCategoryMapper) {
+    public FAQCategoryService(FAQCategoryDao faqCategoryDAO, FAQCategoryMapper faqCategoryMapper,UserService userService) {
         this.faqCategoryDAO = faqCategoryDAO;
         this.faqCategoryMapper = faqCategoryMapper;
+        this.userService = userService;
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public FAQCategoryDto createFAQCategory(FAQCategoryDto faqCategoryDto) {
         Optional<FAQCategory> existingCategoryByName = faqCategoryDAO.findByNameAndLanguageCode(faqCategoryDto.getCategory(), faqCategoryDto.getLanguageCode());
         if (existingCategoryByName.isPresent()) {
@@ -61,6 +65,12 @@ public class FAQCategoryService {
         }
 
         FAQCategory newCategory = new FAQCategory(faqCategoryDto.getCategory(), extId, faqCategoryDto.getLanguageCode());
+        User currentUser = userService.getCurrentUser();
+        newCategory.setCreatedBy(currentUser.getUsername());
+        newCategory.setCreatedAt(ZonedDateTime.now());
+        newCategory.setUpdatedBy(currentUser.getUsername());
+        newCategory.setUpdatedAt(ZonedDateTime.now());
+        
         FAQCategory savedCategory = faqCategoryDAO.save(newCategory);
         return faqCategoryMapper.toDTO(savedCategory);
     }
@@ -78,18 +88,29 @@ public class FAQCategoryService {
         return faqCategoryMapper.toDTO(category);
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public FAQCategoryDto updateFAQCategory(Integer extId, FAQCategoryDto faqCategoryDto) {
         FAQCategory category = faqCategoryDAO.findByExtIdAndLanguageCode(extId, faqCategoryDto.getLanguageCode())
                 .orElseThrow(() -> new RuntimeException("FAQ Category not found"));
         faqCategoryMapper.updateEntityFromDTO(faqCategoryDto, category);
         FAQCategory updatedCategory = faqCategoryDAO.update(category);
+        User currentUser = userService.getCurrentUser();
+        updatedCategory.setUpdatedBy(currentUser.getUsername());
+        updatedCategory.setUpdatedAt(ZonedDateTime.now());
+
         return faqCategoryMapper.toDTO(updatedCategory);
     }
     
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public boolean deleteFAQCategoryByExtId(String extId) {
+        User currentUser = userService.getCurrentUser();
         int deletedCount = faqCategoryDAO.deleteByExtId(extId);
+        if (deletedCount > 0) {
+            FAQCategory updatedCategory = new FAQCategory();
+            updatedCategory.setUpdatedBy(currentUser.getUsername());
+            updatedCategory.setUpdatedAt(ZonedDateTime.now());
+        }
         return deletedCount > 0;
     }
     

@@ -38,13 +38,13 @@ public class LanguageService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public Language createLanguage(Language language) {
         return languageDao.save(language);
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public Language updateLanguage(Long id, Language languageDetails) {
         Language language = getLanguageById(id);
         language.setCode(languageDetails.getCode());
@@ -53,7 +53,7 @@ public class LanguageService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteLanguage(Long id) {
         Language language = getLanguageById(id);
         languageDao.delete(language);

@@ -148,6 +148,18 @@ public class StateDao {
         .getResultList();
     }
 
+	 public Optional<State> findByExtId(String extId) {
+        try {
+            State state = entityManager.createQuery(
+                    "SELECT s FROM State s WHERE s.extId = :extId", State.class)
+                    .setParameter("extId", extId)
+                    .getSingleResult();
+            return Optional.of(state);
+        } catch (NoResultException e) {
+            return Optional.empty();
+        }
+    }
+
 
 
 

@@ -42,6 +42,8 @@ import com.tl.reap_admin_api.mapper.VideoMapper;
 
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.hibernate.exception.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -99,6 +101,8 @@ public class CourseService {
 
     @Value("${aws.s3.crsimg.bucket-url}")
     private String crsImgBucketUrl;
+    
+    private static final Logger logger = LoggerFactory.getLogger(CourseService.class);
        
     
         @Autowired
@@ -141,7 +145,7 @@ public class CourseService {
         }
     
         @Transactional
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
         public CourseDto createCourse(CourseDto courseDto) {
             
             try {
@@ -150,6 +154,9 @@ public class CourseService {
                 course.setUuid(UUID.randomUUID());
                 course.setCreatedAt(ZonedDateTime.now());
                 course.setUpdatedAt(ZonedDateTime.now());
+                User currentUser = userService.getCurrentUser();
+                course.setCreatedBy(currentUser.getUsername());
+                course.setUpdatedBy(currentUser.getUsername());
     
                 //Check whether a course aleady exists for the course code
                 
@@ -176,9 +183,7 @@ public class CourseService {
                 if(savedCourse.getChapters() != null && !savedCourse.getChapters().isEmpty()) {
                     savedCourse.getChapters().forEach(chapter -> {
                         chapter.setUuid(UUID.randomUUID());
-                        chapter.setCreatedAt(ZonedDateTime.now());
                         chapter.setUpdatedAt(ZonedDateTime.now());
-                        chapter.setCreatedBy(userService.getCurrentUser().getUsername());
                         chapter.setUpdatedBy(userService.getCurrentUser().getUsername());
                     });  
                 }
@@ -206,6 +211,10 @@ public class CourseService {
             try {
                 Course course = courseDao.findByUuid(courseUuid)
                         .orElseThrow(() -> new RuntimeException("Course not found with UUID: " + courseUuid));
+                course.setUpdatedAt(ZonedDateTime.now());
+                User currentUser = userService.getCurrentUser();
+                course.setUpdatedBy(currentUser.getUsername());
+                
     
                 String fileExtension = getFileExtension(file.getOriginalFilename());
                 String key = "courses/" + course.getCourseCode() + ".png";
@@ -256,7 +265,7 @@ public class CourseService {
         }
     
         @Transactional(readOnly = true)
-        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+        @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
         public CourseDto getCourseById(Long id) {
             try {
                 Course course = courseDao.findById(id)
@@ -284,11 +293,14 @@ public class CourseService {
         }
     
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto updateCourse(UUID uuid, CourseDto courseDto) {
         try {
             Course existingCourse = courseDao.findByUuid(uuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with UUID: " + uuid));
+            existingCourse.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            existingCourse.setUpdatedBy(currentUser.getUsername());
 
              // Update basic course information
              updateBasicCourseInfo(existingCourse, courseDto);
@@ -333,6 +345,8 @@ public class CourseService {
             existingCourse.setDisplayCourseCode(courseDto.getDisplayCourseCode());
         }
         existingCourse.setUpdatedAt(ZonedDateTime.now());
+        User currentUser = userService.getCurrentUser();
+        existingCourse.setUpdatedBy(currentUser.getUsername());
     }
 
     private Set<CourseTranslation> updateCourseTranslations(Course course, CourseDto courseDto) {
@@ -455,8 +469,8 @@ public class CourseService {
                 chapter = new Chapter();
                 chapter.setUuid(UUID.randomUUID());
                 chapter.setCourse(course);
-                chapter.setCreatedAt(ZonedDateTime.now());
-                chapter.setCreatedBy(userService.getCurrentUser().getUsername());
+                chapter.setUpdatedAt(ZonedDateTime.now());
+                chapter.setUpdatedBy(userService.getCurrentUser().getUsername());
             }
             updateChapter(chapter, chapterDto);
         //    updatedChapters.add(chapter);
@@ -640,29 +654,52 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteCourse(UUID uuid) {
         try {
             Course course = courseDao.findByUuid(uuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with UUID: " + uuid));
+            course.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            course.setUpdatedBy(currentUser.getUsername());
+            
+            // Delete associated KPoint playlists
+            deleteKPointPlaylists(course);
             
             // Course existence is already checked, so we can proceed with deletion
-            // The actual deletion is handled by courseDao.deleteById(uuid) after this block
             courseDao.deleteById(course.getId());
+            
+            logger.info("Course deleted successfully. UUID: {}", uuid);
         } catch (CourseNotFoundException e) {
+            logger.error("Course not found during deletion. UUID: {}", uuid);
             throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error deleting course. UUID: {}", uuid, e);
             throw new RuntimeException("Error deleting course with UUID: " + uuid, e);
         }
     }
+    
+    private void deleteKPointPlaylists(Course course) {
+        String channelDisplayName = course.getCourseCode();
+        try {
+            kPointService.deleteAllPlaylistsForChannel(channelDisplayName);
+            logger.info("Successfully deleted all KPoint playlists for course: {}", course.getCourseCode());
+        } catch (Exception e) {
+            logger.error("Failed to delete KPoint playlists for course: {}. Error: {}", course.getCourseCode(), e.getMessage());
+            
+        }
+    }
+
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto addCourseTranslation(UUID uuid, CourseTranslation translation, Long languageId) {
         try {
             Course course = courseDao.findByUuid(uuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with UUID: " + uuid));
+            course.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            course.setUpdatedBy(currentUser.getUsername());
 
             Language language = languageService.getLanguageById(languageId);
             if (language == null) {
@@ -690,7 +727,6 @@ public class CourseService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public List<CourseDto> getCoursesByCategory(Long categoryId) {
         try {
             return courseDao.findByCategoryId(categoryId).stream()
@@ -702,7 +738,7 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto addChapterToCourse(UUID courseUuid, ChapterDto chapterDto) {
         try {
             Course course = courseDao.findByUuid(courseUuid)
@@ -711,9 +747,10 @@ public class CourseService {
             User user = userService.getCurrentUser();
             Chapter chapter = chapterMapper.toEntity(chapterDto);
             chapter.setUuid(UUID.randomUUID());
+            
+            chapter.setCreatedBy(user.getUsername());
             chapter.setCreatedAt(ZonedDateTime.now());
             chapter.setUpdatedAt(ZonedDateTime.now());
-            chapter.setCreatedBy(user.getUsername());
             chapter.setUpdatedBy(user.getUsername());
             chapter.setCourse(course);
 
@@ -731,11 +768,14 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto updateChapterInCourse(UUID courseUuid, UUID chapterUuid, ChapterDto chapterDto) {
         try {
             Course course = courseDao.findByUuid(courseUuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with uuid: " + courseUuid));
+            course.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            course.setUpdatedBy(currentUser.getUsername());
 
             Chapter chapterToUpdate = course.getChapters().stream()
             .filter(chapter -> chapter.getUuid().equals(chapterUuid))
@@ -754,11 +794,14 @@ public class CourseService {
     }   
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto deleteChapterFromCourse(UUID courseUuid, UUID chapterUuid) {
         try {
             Course course = courseDao.findByUuid(courseUuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with uuid: " + courseUuid));
+            course.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            course.setUpdatedBy(currentUser.getUsername());
 
             Chapter chapterToRemove = course.getChapters().stream()
                     .filter(ch -> ch.getUuid().equals(chapterUuid))
@@ -776,7 +819,7 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public VideoResponse addVideoToChapter(Course course, Chapter chapter, VideoDto videoDto) {
         try {           
 
@@ -882,11 +925,14 @@ public class CourseService {
     }
     
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public VideoResponse addVideoToChapter(UUID courseUuid, UUID chapterUuid, VideoDto videoDto) {
         try {
             Course course = courseDao.findByUuid(courseUuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with uuid: " + courseUuid));
+            course.setUpdatedAt(ZonedDateTime.now());
+            User currentUser = userService.getCurrentUser();
+            course.setUpdatedBy(currentUser.getUsername());
 
             Chapter chapter = chapterDao.findByUuid(chapterUuid)
                     .orElseThrow(() -> new ChapterNotFoundException("Chapter not found with uuid: " + chapterUuid));
@@ -1053,7 +1099,7 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public VideoDto addVideoToCourse(Course course, Channel channel, VideoDto videoDto) {
         
 
@@ -1073,9 +1119,6 @@ public class CourseService {
             } else {
                 video = videoMapper.toEntity(videoDto);
                 video.setUuid(UUID.randomUUID());
-                video.setCreatedAt(ZonedDateTime.now());
-                video.setUpdatedAt(ZonedDateTime.now());
-                 video.setCreatedBy(user.getUsername());
             }
 
             video.setName(videoNode.get("displayname").asText());
@@ -1117,10 +1160,13 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CourseDto deleteVideoFromChapter(UUID courseUuid, UUID chapterUuid, UUID videoUuid) {
         Course course = courseDao.findByUuid(courseUuid)
                 .orElseThrow(() -> new CourseNotFoundException("Course not found with uuid: " + courseUuid));
+        course.setUpdatedAt(ZonedDateTime.now());
+        User currentUser = userService.getCurrentUser();
+        course.setUpdatedBy(currentUser.getUsername());
 
         Chapter chapter = course.getChapters().stream()
                 .filter(ch -> ch.getUuid().equals(chapterUuid))
@@ -1267,7 +1313,7 @@ public class CourseService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void bulkUploadVideos(InputStream inputStream) throws IOException {
         try (Workbook workbook = new XSSFWorkbook(inputStream)) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -1320,7 +1366,7 @@ public class CourseService {
             updateCourseTranslationWithVideo(course, youtubeUrl, languageCode);
         } else {
         // Find or create chapter
-            Chapter chapter = findOrCreateChapter(course, chapterName, languageCode);
+            Chapter chapter = findOrCreateChapter(course, chapterName, "en");
         
             // Create video DTO
             VideoDto videoDto = new VideoDto();
@@ -1342,9 +1388,238 @@ public class CourseService {
        
     }
 
+    /**
+     * Process batch update for chapters with multi-language translations
+     * @param file Excel file with chapter data
+     * @return Map containing statistics of the operation
+     * @throws IOException If file processing fails
+     */
+    @Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    public Map<String, Object> processChapterBatchUpdate(MultipartFile file) throws IOException {
+        Map<String, Object> result = new HashMap<>();
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("totalRows", 0);
+        stats.put("processed", 0);
+        stats.put("skipped", 0);
+        stats.put("chaptersCreated", 0);
+        stats.put("translationsAdded", 0);
+        stats.put("errors", 0);
+        List<String> errorMessages = new ArrayList<>();
+
+        // Prefetch all course codes and their corresponding courses in a single query
+        Map<String, Course> courseCache = new HashMap<>();
+        
+        // Prefetch all language data in a single query
+        Map<String, Language> languageCache = languageService.getAllLanguages()
+            .stream()
+            .collect(Collectors.toMap(Language::getCode, language -> language));
+        
+        // Get current user once to avoid multiple service calls
+        User currentUser = userService.getCurrentUser();
+        ZonedDateTime now = ZonedDateTime.now();
+        
+        // Collect all changes to be made
+        List<Chapter> chaptersToSave = new ArrayList<>();
+        
+        try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
+            Sheet sheet = workbook.getSheetAt(0);
+            
+            // Skip header row if it exists
+            Iterator<Row> rowIterator = sheet.iterator();
+            if (rowIterator.hasNext()) {
+                Row headerRow = rowIterator.next();
+                // Validate headers if needed
+                String courseCodeHeader = getCellValueAsString(headerRow.getCell(0));
+                if (!"Course Code".equalsIgnoreCase(courseCodeHeader)) {
+                    throw new RuntimeException("Invalid file format. Expected 'Course Code' in first column.");
+                }
+            }
+
+            // First, collect all course codes from the file
+            Set<String> allCourseCodes = new HashSet<>();
+            for (Row row : sheet) {
+                if (row.getRowNum() == 0) continue; // Skip header
+                String courseCode = getCellValueAsString(row.getCell(0));
+                if (!courseCode.isEmpty()) {
+                    allCourseCodes.add(courseCode);
+                }
+            }
+            
+            // Batch load all needed courses in a single operation
+            for (String code : allCourseCodes) {
+                Optional<Course> course = courseDao.findByCourseCode(code);
+                if (course.isPresent()) {
+                    courseCache.put(code, course.get());
+                }
+            }
+
+            // Process each row
+            while (rowIterator.hasNext()) {
+                Row row = rowIterator.next();
+                stats.put("totalRows", stats.get("totalRows") + 1);
+                
+                try {
+                    String courseCode = getCellValueAsString(row.getCell(0));
+                    String chapterNameEn = getCellValueAsString(row.getCell(1));
+                    String chapterNameHi = getCellValueAsString(row.getCell(2));
+                    
+                    // Skip rows with empty values
+                    if (courseCode.isEmpty() || (chapterNameEn.isEmpty() && chapterNameHi.isEmpty())) {
+                        stats.put("skipped", stats.get("skipped") + 1);
+                        continue;
+                    }
+                    
+                    // Get course from cache
+                    Course course = courseCache.get(courseCode);
+                    if (course == null) {
+                        throw new CourseNotFoundException("Course not found with code: " + courseCode);
+                    }
+                    
+                    // Process the chapter data
+                    Chapter chapterToSave = processChapterTranslations(
+                        course, 
+                        chapterNameEn, 
+                        chapterNameHi, 
+                        stats, 
+                        languageCache, 
+                        currentUser, 
+                        now
+                    );
+                    
+                    if (chapterToSave != null) {
+                        chaptersToSave.add(chapterToSave);
+                    }
+                    
+                    stats.put("processed", stats.get("processed") + 1);
+                    
+                } catch (Exception e) {
+                    stats.put("errors", stats.get("errors") + 1);
+                    errorMessages.add("Row " + (row.getRowNum() + 1) + ": " + e.getMessage());
+                    logger.error("Error processing row " + (row.getRowNum() + 1), e);
+                }
+            }
+        }
+        
+        // Batch save all chapters at once to minimize database operations
+        if (!chaptersToSave.isEmpty()) {
+            for (Chapter chapter : chaptersToSave) {
+                chapterDao.save(chapter);
+            }
+        }
+        
+        result.put("statistics", stats);
+        if (!errorMessages.isEmpty()) {
+            result.put("errors", errorMessages);
+        }
+        
+        return result;
+    }
+
+    private Chapter processChapterTranslations(
+        Course course, 
+        String chapterNameEn, 
+        String chapterNameHi, 
+        Map<String, Integer> stats,
+        Map<String, Language> languageCache,
+        User currentUser,
+        ZonedDateTime now) {
+        
+        // Find chapter by English or Hindi name
+        Optional<Chapter> existingChapter = Optional.empty();
+        
+        if (!chapterNameEn.isEmpty()) {
+            existingChapter = findChapterByTranslation(course, chapterNameEn, "en");
+        }
+        
+        if (existingChapter.isEmpty() && !chapterNameHi.isEmpty()) {
+            existingChapter = findChapterByTranslation(course, chapterNameHi, "hi");
+        }
+        
+        if (existingChapter.isPresent()) {
+            // Update existing chapter with missing translations
+            Chapter chapter = existingChapter.get();
+            boolean translationsAdded = false;
+            
+            if (!chapterNameEn.isEmpty() && !hasTranslation(chapter, "en")) {
+                addTranslation(chapter, chapterNameEn, "en", languageCache);
+                translationsAdded = true;
+            }
+            
+            if (!chapterNameHi.isEmpty() && !hasTranslation(chapter, "hi")) {
+                addTranslation(chapter, chapterNameHi, "hi", languageCache);
+                translationsAdded = true;
+            }
+            
+            if (translationsAdded) {
+                chapter.setUpdatedAt(now);
+                chapter.setUpdatedBy(currentUser.getUsername());
+                stats.put("translationsAdded", stats.get("translationsAdded") + 1);
+                return chapter;
+            }
+            
+            return null;
+        } else if (!chapterNameEn.isEmpty() || !chapterNameHi.isEmpty()) {
+            // Create new chapter with available translations
+            Chapter newChapter = new Chapter();
+            newChapter.setUuid(UUID.randomUUID());
+            newChapter.setCourse(course);
+            newChapter.setOrderNumber(getNextChapterOrderNumber(course));
+            newChapter.setCreatedAt(now);
+            newChapter.setUpdatedAt(now);
+            newChapter.setCreatedBy(currentUser.getUsername());
+            newChapter.setUpdatedBy(currentUser.getUsername());
+            newChapter.setStatus(1); // Active status
+            
+            if (!chapterNameEn.isEmpty()) {
+                addTranslation(newChapter, chapterNameEn, "en", languageCache);
+            }
+            
+            if (!chapterNameHi.isEmpty()) {
+                addTranslation(newChapter, chapterNameHi, "hi", languageCache);
+            }
+            
+            course.addChapter(newChapter);
+            stats.put("chaptersCreated", stats.get("chaptersCreated") + 1);
+            return newChapter;
+        }
+        
+        return null;
+    }
+
+    private Optional<Chapter> findChapterByTranslation(Course course, String chapterName, String languageCode) {
+        return course.getChapters().stream()
+            .filter(chapter -> chapter.getTranslations().stream()
+                .anyMatch(translation -> 
+                    translation.getLanguage().getCode().equals(languageCode) && 
+                    translation.getTitle().equals(chapterName)))
+            .findFirst();
+    }
+
+    private boolean hasTranslation(Chapter chapter, String languageCode) {
+        return chapter.getTranslations().stream()
+            .anyMatch(translation -> translation.getLanguage().getCode().equals(languageCode));
+    }
+
+    private void addTranslation(Chapter chapter, String title, String languageCode, Map<String, Language> languageCache) {
+        ChapterTranslation translation = new ChapterTranslation();
+        translation.setChapter(chapter);
+        translation.setLanguage(languageCache.get(languageCode));
+        translation.setTitle(title);
+        translation.setDescription(title); // Using title as description by default
+        chapter.addTranslation(translation);
+    }
+
+    private Integer getNextChapterOrderNumber(Course course) {
+        return course.getChapters().stream()
+            .map(Chapter::getOrderNumber)
+            .max(Integer::compareTo)
+            .orElse(0) + 1;
+    }
+
     private void updateCourseTranslationWithVideo(Course course, String youtubeUrl, String languageCode) {
         CourseTranslation translation = course.getTranslations().stream()
-            .filter(t -> t.getLanguage().getCode().equals(languageCode))
+            .filter(t -> t.getLanguage().getCode().equals("en"))
             .findFirst()
             .orElseThrow(() -> new RuntimeException("Course translation not found for language: " + languageCode));
     
@@ -1400,12 +1675,6 @@ public class CourseService {
             .orElseThrow(() -> new ChapterNotFoundException("Newly created chapter not found"));
     }
 
-    private Integer getNextChapterOrderNumber(Course course) {
-        return course.getChapters().stream()
-            .map(Chapter::getOrderNumber)
-            .max(Integer::compareTo)
-            .orElse(0) + 1;
-    }
     private String getCellValueAsString(Cell cell) {
         if (cell == null) {
             return "";
@@ -1418,7 +1687,5 @@ public class CourseService {
             default:
                 return "";
         }
-    }
-
-   
+    }  
 }

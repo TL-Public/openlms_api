@@ -3,8 +3,10 @@ package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
 
+import java.time.ZonedDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "categories")
@@ -25,12 +27,23 @@ public class Category {
 
     @OneToMany(mappedBy = "category")
     private Set<Course> courses = new HashSet<>();
+    
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+  
 
     public Category() {
-    }
-
-    public Category(String name) {
-        this.name = name;
+        this.createdAt = ZonedDateTime.now();
+        this.updatedAt = ZonedDateTime.now();
     }
 
     // Getters and setters
@@ -73,6 +86,38 @@ public class Category {
 
 	public void setLanguageCode(String languageCode) {
 		this.languageCode = languageCode;
+	}
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
 	}
     
     

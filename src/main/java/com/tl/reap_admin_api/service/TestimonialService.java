@@ -6,6 +6,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import java.io.IOException;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,6 +25,7 @@ import com.tl.reap_admin_api.dao.TestimonialDao;
 import com.tl.reap_admin_api.dto.CourseDto;
 import com.tl.reap_admin_api.dto.TestimonialDTO;
 import com.tl.reap_admin_api.dto.TestimonialTranslationDTO;
+import com.tl.reap_admin_api.exception.DuplicatePriorityOrderException;
 import com.tl.reap_admin_api.mapper.TestimonialMapper;
 import com.tl.reap_admin_api.model.Course;
 import com.tl.reap_admin_api.model.Language;
@@ -32,6 +34,8 @@ import com.tl.reap_admin_api.model.TestimonialTranslation;
 import com.tl.reap_admin_api.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -64,11 +68,19 @@ public class TestimonialService {
     }
 
 	 // Update createTestimonial method to handle video
-    @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
-    public TestimonialDTO createTestimonial(TestimonialDTO dto) {
+	@Transactional
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    public TestimonialDTO createTestimonial(TestimonialDTO dto) throws DuplicatePriorityOrderException {
+        if (dto.getOrderNo() != null) {
+            Optional<Testimonial> existingTestimonial = testimonialDAO.findByorderNo(dto.getOrderNo());
+            if (existingTestimonial.isPresent()) {
+                throw new DuplicatePriorityOrderException("A testimonial with priority order " + dto.getOrderNo() + " already exists.");
+            }
+        }
+
         Testimonial testimonial = new Testimonial();
         testimonial.setImage(dto.getImage());
+        testimonial.setOrderNo(dto.getOrderNo());
         
         // Handle video if provided
         if (dto.getVideoUrl() != null && !dto.getVideoUrl().isEmpty()) {
@@ -82,17 +94,23 @@ public class TestimonialService {
         User currentUser = userService.getCurrentUser();
         testimonial.setCreatedBy(currentUser.getUsername());
         testimonial.setUpdatedBy(currentUser.getUsername());
+        testimonial.setCreatedAt(ZonedDateTime.now());
+        testimonial.setUpdatedAt(ZonedDateTime.now());
+
         updateTranslations(testimonial, dto.getTranslations());
         testimonial = testimonialDAO.save(testimonial);
         return mapper.toDTO(testimonial);
     }
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public TestimonialDTO uploadTestimonialImage(UUID tstmnlUuid, MultipartFile file) throws IOException {
 		try {
 			Testimonial testimonial = testimonialDAO.findByUuid(tstmnlUuid)
 					.orElseThrow(() -> new RuntimeException("Testimonial not found with UUID: " + tstmnlUuid));
+			User currentUser = userService.getCurrentUser();
+			 testimonial.setUpdatedBy(currentUser.getUsername());
+		        testimonial.setUpdatedAt(ZonedDateTime.now());
 
 			String fileExtension = getFileExtension(file.getOriginalFilename());
 			String key = "testimonials/" + testimonial.getId() + ".png";
@@ -118,7 +136,7 @@ public class TestimonialService {
 		return filename.substring(filename.lastIndexOf(".") + 1);
 	}
 
-	@Transactional
+	@Transactional	
 	public TestimonialDTO getTestimonialByUuid(UUID uuid) {
 		Testimonial testimonial = testimonialDAO.findByUuid(uuid)
 				.orElseThrow(() -> new RuntimeException("Testimonial not found"));
@@ -132,7 +150,7 @@ public class TestimonialService {
 
 	// Update updateTestimonial method to handle video
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public TestimonialDTO updateTestimonial(UUID uuid, TestimonialDTO dto) {
         Testimonial testimonial = testimonialDAO.findByUuid(uuid)
                 .orElseThrow(() -> new RuntimeException("Testimonial not found"));
@@ -147,11 +165,9 @@ public class TestimonialService {
                 testimonial.setVideoExtId(videoNode.get("id").asText());
             }
         }
-        
-        testimonial.setUpdatedAt(ZonedDateTime.now());
         User currentUser = userService.getCurrentUser();
         testimonial.setUpdatedBy(currentUser.getUsername());
-
+        testimonial.setUpdatedAt(ZonedDateTime.now());
         updateTranslations(testimonial, dto.getTranslations());
 
         testimonial = testimonialDAO.save(testimonial);
@@ -176,13 +192,22 @@ public class TestimonialService {
 	}
 
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
 	public void deleteTestimonial(UUID uuid) {
-		testimonialDAO.deleteByUuid(uuid);
+	    Testimonial testimonial = testimonialDAO.findByUuid(uuid)
+	        .orElseThrow(() -> new EntityNotFoundException("Testimonial not found for UUID: " + uuid));
+
+	    User currentUser = userService.getCurrentUser();
+	    testimonial.setUpdatedBy(currentUser.getUsername());
+	    testimonial.setUpdatedAt(ZonedDateTime.now());
+
+	    testimonialDAO.save(testimonial); 
+	    testimonialDAO.deleteByUuid(uuid);
 	}
+
 	
 	@Transactional
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN' )")
 	public TestimonialDTO uploadTestimonialVideo(UUID uuid, String videoUrl) {
 		try {
 			Testimonial testimonial = testimonialDAO.findByUuid(uuid)

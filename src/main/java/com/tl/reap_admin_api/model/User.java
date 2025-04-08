@@ -28,17 +28,26 @@ public class User {
     @Column(name = "role", nullable = false)
     private Role role;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
     
     @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
     private UserProfile userProfile;
     
     @Column(name = "status", nullable = false, columnDefinition = "integer default 1")
     private Integer status = 1;
+
+    @Column(name = "role_id", nullable = false, columnDefinition = "integer default 0")
+    private Integer roleId = 0;
 
     // Constructors, getters, and setters
 
@@ -130,5 +139,28 @@ public class User {
 		this.status = status;
 	}
     
+    public Integer getRoleId() {
+        return roleId;
+    }
+
+    public void setRoleId(Integer roleId) {
+        this.roleId = roleId;
+    }
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
     
 }

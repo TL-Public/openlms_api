@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,6 +25,7 @@ import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,8 +48,10 @@ import com.tl.reap_admin_api.model.Bank;
 import com.tl.reap_admin_api.model.District;
 import com.tl.reap_admin_api.model.Language;
 import com.tl.reap_admin_api.model.RSETI;
+import com.tl.reap_admin_api.model.Role;
 import com.tl.reap_admin_api.model.RsetiTranslation;
 import com.tl.reap_admin_api.model.State;
+import com.tl.reap_admin_api.model.User;
 
 @Service
 public class RsetiService {
@@ -60,21 +64,28 @@ public class RsetiService {
     private final LanguageDao languageDao;   
     private StateDao stateDao;
     private BankDao bankDao;
+    private UserService userService;
 
     private final RsetiMapper rsetiMapper;
 
     private static final String DEFAULT_LANGUAGE_CODE = "1";
 
     @Autowired
-    public RsetiService(RsetiDao rsetiDao, LanguageDao languageDao, RsetiMapper rsetiMapper, StateDao stateDao, BankDao bankDao, AmazonS3 amazonS3Client) {
+    public RsetiService(RsetiDao rsetiDao, LanguageDao languageDao, RsetiMapper rsetiMapper, StateDao stateDao, BankDao bankDao, AmazonS3 amazonS3Client, UserService userService) {
         this.rsetiDao = rsetiDao;
         this.languageDao = languageDao;
         this.rsetiMapper = rsetiMapper;
         this.stateDao = stateDao;
         this.bankDao = bankDao;
         this.amazonS3Client = amazonS3Client;
+        this.userService = userService;
     }
 
+   
+    private Role getCurrentUserRole() {
+        User currentUser = userService.getCurrentUser();
+        return currentUser.getRole();
+    }
 
     @Transactional(readOnly = true)
     public List<RsetiDto> getAllRsetis() {
@@ -84,7 +95,33 @@ public class RsetiService {
 
     @Transactional(readOnly = true)
     public List<RsetiListDto> getAllRsetisWithCourseCount() {
-        List<Object[]> results = rsetiDao.findAllWithCourseCount();
+
+        Role currentUserRole = getCurrentUserRole();
+        List<Object[]> results;
+        switch (currentUserRole) {
+            case PUBLIC:
+            case SUPER_ADMIN:
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                results = rsetiDao.findAllWithCourseCount();
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                Integer stateId = userService.getCurrentUserStateId();
+                results = rsetiDao.findAllWithCourseCountByState(stateId);
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:
+                UUID rsetiId = userService.getCurrentUserRsetiId();
+                results = rsetiDao.findAllWithCourseCountByRseti(rsetiId);
+                break;
+            default:
+                results = rsetiDao.findAllWithCourseCount();
+                break;
+        }
+
+
+       
         Map<UUID, RsetiListDto> rsetiMap = new HashMap<>();
 
         for (Object[] result : results) {
@@ -112,20 +149,51 @@ public class RsetiService {
     
     @Transactional(readOnly = true)
     public RsetiDto getRsetiByUuid(UUID uuid) {
-        return rsetiDao.findByUuid(uuid)
-                .map(rsetiMapper::toDTO)
-                .orElse(null);
+        Role currentUserRole = getCurrentUserRole();
+        RSETI rseti;
+
+        switch (currentUserRole) {
+            case PUBLIC:
+            case SUPER_ADMIN:
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                rseti = rsetiDao.findByUuid(uuid).orElse(null);
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                Integer stateId = userService.getCurrentUserStateId();
+                rseti = rsetiDao.findByUuidAndState(uuid, stateId).orElse(null);
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:
+                UUID rsetiId = userService.getCurrentUserRsetiId();
+                rseti = rsetiDao.findByUuidAndRseti(uuid, rsetiId).orElse(null);
+                break;
+            default:
+                rseti = rsetiDao.findByUuid(uuid).orElse(null);
+                break;
+        }
+
+        return rseti != null ? rsetiMapper.toDTO(rseti) : null;
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public RsetiDto createRseti(RsetiDto rsetiDto) throws DuplicateExtIdException {
         if (rsetiDao.existsByExtId(rsetiDto.getExtId())) {
             throw new DuplicateExtIdException("RSETI with extId " + rsetiDto.getExtId() + " already exists");
         }
 
+        checkPermission(null, rsetiDto.getStateId());
+
         RSETI rseti = rsetiMapper.toEntity(rsetiDto);
         rseti.setUuid(UUID.randomUUID()); 
+        rseti.setUpdatedAt(ZonedDateTime.now());
+        rseti.setCreatedAt(ZonedDateTime.now());
+     // Get the current user
+        User currentUser = userService.getCurrentUser();
+        rseti.setUpdatedBy(currentUser.getUsername());
+        rseti.setCreatedBy(currentUser.getUsername());
 
         if (rsetiDto.getTranslations() != null && !rsetiDto.getTranslations().isEmpty()) {
             createTranslations(rseti, rsetiDto.getTranslations());
@@ -154,11 +222,12 @@ public class RsetiService {
 
 
     @Transactional
-    //@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public RsetiDto updateRseti(UUID uuid, RsetiDto rsetiDto) {
         RSETI rseti = rsetiDao.findByUuid(uuid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "RSETI not found"));
         
+        checkPermission(uuid, rsetiDto.getStateId());
         // Update main RSETI fields
         rsetiMapper.updateEntityFromDTO(rsetiDto, rseti);
         
@@ -170,6 +239,11 @@ public class RsetiService {
         setLanguagesForTranslations(rseti);
         
         RSETI updatedRseti = rsetiDao.save(rseti);
+       
+        // Get the current user
+        User currentUser = userService.getCurrentUser();
+        updatedRseti.setUpdatedBy(currentUser.getUsername());
+        updatedRseti.setUpdatedAt(ZonedDateTime.now());
         return rsetiMapper.toDTO(updatedRseti);
     }
 
@@ -205,10 +279,15 @@ public class RsetiService {
 
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deleteRseti(UUID uuid) {
         RSETI rseti = rsetiDao.findByUuid(uuid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "RSETI not found"));
+        checkPermission(uuid, rseti.getStateId());
+        // Get the current user
+        User currentUser = userService.getCurrentUser();
+        rseti.setUpdatedBy(currentUser.getUsername());
+        rseti.setUpdatedAt(ZonedDateTime.now());
         rsetiDao.deleteByUuid(uuid);
     }
     
@@ -216,6 +295,7 @@ public class RsetiService {
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
     public List<RsetiDto> getRsetisByStateId(UUID stateId) {
         List<RSETI> rsetis = rsetiDao.findByStateId(stateId);
+        
         return rsetis.stream().map(rsetiMapper::toDTO).collect(Collectors.toList());
     }
 
@@ -281,6 +361,11 @@ public class RsetiService {
                     
 
                     rseti.setUuid(UUID.randomUUID());
+                    rseti.setCreatedAt(ZonedDateTime.now());
+            		rseti.setUpdatedAt(ZonedDateTime.now());
+                    User currentUser = userService.getCurrentUser();
+                    rseti.setCreatedBy(currentUser.getUsername());
+                    rseti.setUpdatedBy(currentUser.getUsername());
                     rseti.setExtId(getStringCellValue(row.getCell(5))); // Institute ID
                     rseti.setEmail(getStringCellValue(row.getCell(4))); // RSETI E-mail ID
                     rseti.setContactNo(getStringCellValue(row.getCell(8))); // RSETI Contact no
@@ -427,6 +512,30 @@ public class RsetiService {
                 return String.valueOf((int) cell.getNumericCellValue());
             default:
                 return "";
+        }
+    }
+
+    private void checkPermission(UUID rsetiUuid, Integer stateId) {
+        User currentUser = userService.getCurrentUser();
+        Role userRole = currentUser.getRole();
+
+        switch (userRole) {
+			case PUBLIC:
+            case SUPER_ADMIN:
+            case NAR_ADMIN:
+            case NAR_STAFF:
+                // These roles have access to all RSETIs
+                break;
+            case STATE_ADMIN:
+            case STATE_STAFF:
+                if (!stateId.equals(currentUser.getUserProfile().getState().getExtId())) {
+                    throw new AccessDeniedException("You don't have permission to access this RSETI Course");
+                }
+                break;
+            case RSETI_ADMIN:
+            case RSETI_STAFF:              
+            default:
+                throw new AccessDeniedException("You don't have permission to access RSETI Course data");
         }
     }
 }

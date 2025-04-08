@@ -840,5 +840,136 @@ public class KPointService implements ThirdPartyVideoService {
             return Base64.encodeBase64URLSafeString(rawHmac);
         }
     }
+    
+    
+    public void deleteAllVideos(String languageCode) {
+        int first = 0;
+        int max = 100;
+        boolean hasMore = true;
+
+        while (hasMore) {
+            JsonNode videosNode = getAllVideos(first, max, languageCode);
+            if (videosNode == null || !videosNode.has("list") || videosNode.get("list").size() == 0) {
+                hasMore = false;
+                continue;
+            }
+
+            JsonNode listNode = videosNode.get("list");
+            int itemsProcessed = 0;
+            for (JsonNode node : listNode) {
+                try {
+                    if (node.has("name")) {
+                        deleteVideo(node.get("name").asText());
+                        itemsProcessed++;
+                    }
+                } catch (Exception e) {
+                    logger.error("Error deleting video: {}", e.getMessage());
+                }
+            }
+
+            first += itemsProcessed; // Increment by actual number of items processed
+            
+            // Check if there are more items and if totalcount is available
+            hasMore = videosNode.has("totalcount") && first < videosNode.get("totalcount").asInt();
+            
+            // Safeguard in case totalcount is missing
+            if (!videosNode.has("totalcount") && itemsProcessed == max) {
+                hasMore = true; // Assume there might be more if we processed max items
+            }
+        }
+    }
+
+    private JsonNode getAllVideos(int first, int max, String languageCode) {
+        String url = "";
+        try {
+            String token = authTokenManager.getAuthToken();
+            url = String.format("%s?scope=recent&xt=%s&first=%d&max=%d&facet.language=%s", videoUrl, token, first, max, languageCode);
+            errorUrl = url;
+
+            HttpHeaders headers = new HttpHeaders();
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+
+            logger.debug("Get All Videos: - {} - url - {}", response.getStatusCode(), url);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+                return objectMapper.readTree(response.getBody());
+            }
+        } catch (Exception e) {
+            logger.error("Error getting videos: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    public void deleteAllPlaylistsForChannel(String channelDisplayName) {
+        try {
+            JsonNode channelNode = this.getChannel(channelDisplayName);
+            if (channelNode == null) {
+                throw new KPChannleNotFoundException("Channel - " + channelDisplayName + " not found");
+            }
+
+            String channelName = channelNode.get("name").asText();
+            int first = 0;
+            int max = 100;
+            boolean hasMore = true;
+
+            while (hasMore) {
+                JsonNode playlistsNode = getPlaylistsForChannel(channelName, first, max);
+                if (playlistsNode == null || !playlistsNode.has("list") || playlistsNode.get("list").size() == 0) {
+                    hasMore = false;
+                    continue;
+                }
+
+                JsonNode listNode = playlistsNode.get("list");
+                for (JsonNode node : listNode) {
+                    try {
+                        if (node.has("name")) {
+                            deletePlaylist(node.get("name").asText());
+                        }
+                    } catch (Exception e) {
+                        logger.error("Error deleting playlist: {}", e.getMessage());
+                    }
+                }
+
+                first += max;
+                hasMore = playlistsNode.has("totalcount") && first < playlistsNode.get("totalcount").asInt();
+            }
+
+            logger.info("Finished deleting all playlists for channel: {}", channelDisplayName);
+        } catch (KPChannleNotFoundException e) {
+            logger.error("Channel not found: {}", e.getMessage());
+        } catch (Exception e) {
+            logger.error("Error deleting playlists for channel: {}", e.getMessage());
+        }
+    }
+
+    private JsonNode getPlaylistsForChannel(String channelName, int first, int max) {
+        String url = "";
+        try {
+            String token = authTokenManager.getAuthToken();
+            url = String.format("%s/%s/content?type=playlists&xt=%s&first=%d&max=%d", 
+                                channelUrl, channelName, token, first, max);
+            errorUrl = url;
+
+            HttpHeaders headers = new HttpHeaders();
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+
+            logger.debug("Get Playlists for Channel: - {} - url - {}", response.getStatusCode(), url);
+            if (response.getStatusCode() == HttpStatus.OK) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+                return objectMapper.readTree(response.getBody());
+            }
+        } catch (Exception e) {
+            logger.error("Error getting playlists for channel: {}", e.getMessage());
+        }
+
+        return null;
+    }
 
 }

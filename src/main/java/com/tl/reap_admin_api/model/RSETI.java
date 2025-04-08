@@ -1,6 +1,8 @@
 package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
+
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +43,24 @@ public class RSETI {
     
     @Column(name = "status", nullable = false, columnDefinition = "integer default 1")
     private Integer status = 1;
+    
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
 
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
+
+    
+    public RSETI() {
+    	 this.createdAt = ZonedDateTime.now();
+         this.updatedAt = ZonedDateTime.now();
+    }
     // Getters and setters
 
     public Long getId() {
@@ -148,6 +167,39 @@ public class RSETI {
 	public void setStatus(Integer status) {
 		this.status = status;
 	}
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
     
+	
     
 }

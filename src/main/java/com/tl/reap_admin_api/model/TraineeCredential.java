@@ -24,11 +24,17 @@ public class TraineeCredential {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private ZonedDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
 
     @OneToOne(mappedBy = "trainee", cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = false)
     private TraineeProfile traineeProfile;
@@ -114,4 +120,21 @@ public class TraineeCredential {
         }
         this.traineeProfile = traineeProfile;
     }
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+    
 }

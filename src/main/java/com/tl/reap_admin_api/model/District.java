@@ -1,5 +1,7 @@
 package com.tl.reap_admin_api.model;
 
+import java.time.ZonedDateTime;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -21,9 +23,24 @@ public class District {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "state_id", nullable = false)
     private State state;
+    
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
 
     // Default constructor
-    public District() {}
+    public District() {
+    	 this.createdAt = ZonedDateTime.now();
+         this.updatedAt = ZonedDateTime.now();
+    }
 
     // Constructor with name, extId, and languageCode
     public District(String name, Integer extId, String languageCode) {
@@ -73,5 +90,39 @@ public class District {
     public void setState(State state) {
         this.state = state;
     }
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
+	}
+    
+    
 }
 

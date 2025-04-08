@@ -2,6 +2,7 @@ package com.tl.reap_admin_api.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.UUID;
 
 @Entity
@@ -30,16 +31,30 @@ public class TraineeRseti {
     private TraineeProfile traineeProfile;
 
     @ManyToOne
-    @JoinColumn(name = "rseti_course_id", nullable = false)
+    @JoinColumn(name = "rseti_course_id")
     private RsetiCourse rsetiCourse;
 
     @Column(name = "status", nullable = false, columnDefinition = "integer default 1")
     private Integer status = 1;
+    
+    @Column(name = "created_at", updatable = false)
+    private ZonedDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private ZonedDateTime updatedAt;
+
+    @Column(name = "created_by",  updatable = false)
+    private String createdBy;
+
+    @Column(name = "updated_by")
+    private String updatedBy;
 
     // Constructors, getters, and setters
 
     public TraineeRseti() {
         this.uuid = UUID.randomUUID();
+        this.createdAt = ZonedDateTime.now();
+        this.updatedAt = ZonedDateTime.now();
     }
 
     // Getters and setters for all fields
@@ -108,6 +123,38 @@ public class TraineeRseti {
 
 	public void setStatus(Integer status) {
 		this.status = status;
+	}
+
+	public ZonedDateTime getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(ZonedDateTime createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public ZonedDateTime getUpdatedAt() {
+		return updatedAt;
+	}
+
+	public void setUpdatedAt(ZonedDateTime updatedAt) {
+		this.updatedAt = updatedAt;
+	}
+
+	public String getCreatedBy() {
+		return createdBy;
+	}
+
+	public void setCreatedBy(String createdBy) {
+		this.createdBy = createdBy;
+	}
+
+	public String getUpdatedBy() {
+		return updatedBy;
+	}
+
+	public void setUpdatedBy(String updatedBy) {
+		this.updatedBy = updatedBy;
 	}
     
  

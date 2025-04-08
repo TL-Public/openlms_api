@@ -5,6 +5,7 @@ import com.tl.reap_admin_api.dto.CategoryDto;
 import com.tl.reap_admin_api.mapper.CategoryMapper;
 import com.tl.reap_admin_api.model.Category;
 import com.tl.reap_admin_api.model.FAQCategory;
+import com.tl.reap_admin_api.model.User;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -22,15 +24,17 @@ public class CategoryService {
 
     private final CategoryDao categoryDao;
     private final CategoryMapper categoryMapper;
+    private final UserService userService;
 
     @Autowired
-    public CategoryService(CategoryDao categoryDao, CategoryMapper categoryMapper) {
+    public CategoryService(CategoryDao categoryDao, CategoryMapper categoryMapper,UserService userService) {
         this.categoryDao = categoryDao;
         this.categoryMapper = categoryMapper;
+        this.userService = userService;
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CategoryDto createCategory(CategoryDto categoryDto) {
         // Check if a category with the same name and language code already exists
         Optional<Category> existingCategory = categoryDao.findByNameAndLanguageCode(categoryDto.getName(), categoryDto.getLanguageCode());
@@ -77,16 +81,19 @@ public class CategoryService {
         return categoryMapper.toDTO(category);
     }
 
-   @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+   @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public CategoryDto updateCategory(Integer extId, CategoryDto categoryDto) {
         Category category = categoryDao.findByExtIdAndLanguageCode(extId, categoryDto.getLanguageCode())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
         categoryMapper.updateEntityFromDTO(categoryDto, category);
         Category updatedCategory = categoryDao.save(category);
+        updatedCategory.setUpdatedAt(ZonedDateTime.now());
+        User currentUser = userService.getCurrentUser();
+        updatedCategory.setUpdatedBy(currentUser.getUsername());
         return categoryMapper.toDTO(updatedCategory);
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public boolean deleteCategoryByExtId(Integer extId) {
         int deletedCount = categoryDao.deleteByExtId(extId);
         return deletedCount > 0;

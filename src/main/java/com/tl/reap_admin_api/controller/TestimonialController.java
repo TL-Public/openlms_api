@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.tl.reap_admin_api.dto.CourseDto;
 import com.tl.reap_admin_api.dto.TestimonialDTO;
+import com.tl.reap_admin_api.exception.DuplicatePriorityOrderException;
 import com.tl.reap_admin_api.service.TestimonialService;
 
 @RestController
@@ -30,9 +32,19 @@ public class TestimonialController {
 	private TestimonialService testimonialService;
 
 	@PostMapping
-	public ResponseEntity<TestimonialDTO> createTestimonial(@RequestBody TestimonialDTO testimonialDTO) {
-		TestimonialDTO createdTestimonial = testimonialService.createTestimonial(testimonialDTO);
-		return new ResponseEntity<>(createdTestimonial, HttpStatus.CREATED);
+	public ResponseEntity<?> createTestimonial(@RequestBody TestimonialDTO testimonialDTO) {
+	    try {
+	        TestimonialDTO createdTestimonial = testimonialService.createTestimonial(testimonialDTO);
+	        return new ResponseEntity<>(createdTestimonial, HttpStatus.CREATED);
+	    } catch (DuplicatePriorityOrderException e) {
+	        return ResponseEntity
+	            .status(HttpStatus.CONFLICT)
+	            .body("A testimonial with priority order " + testimonialDTO.getOrderNo() + " already exists.");
+	    } catch (AccessDeniedException e) {
+	        return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+	    } catch (Exception e) {
+	        return ResponseEntity.internalServerError().build();
+	    }
 	}
 
 	@PostMapping("/{uuid}/image")
@@ -40,6 +52,8 @@ public class TestimonialController {
         try {
             TestimonialDTO updatedTestimonial = testimonialService.uploadTestimonialImage(uuid, file);
             return ResponseEntity.ok(updatedTestimonial);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
@@ -48,8 +62,14 @@ public class TestimonialController {
 
 	@GetMapping("/{uuid}")
 	public ResponseEntity<TestimonialDTO> getTestimonial(@PathVariable UUID uuid) {
-		TestimonialDTO testimonial = testimonialService.getTestimonialByUuid(uuid);
-		return ResponseEntity.ok(testimonial);
+		try {
+			TestimonialDTO testimonial = testimonialService.getTestimonialByUuid(uuid);
+			return ResponseEntity.ok(testimonial);
+		} catch (AccessDeniedException e) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError().build();
+		}
 	}
 
 	@GetMapping
@@ -61,14 +81,26 @@ public class TestimonialController {
 	@PutMapping("/{uuid}")
 	public ResponseEntity<TestimonialDTO> updateTestimonial(@PathVariable UUID uuid,
 			@RequestBody TestimonialDTO testimonialDTO) {
-		TestimonialDTO updatedTestimonial = testimonialService.updateTestimonial(uuid, testimonialDTO);
-		return ResponseEntity.ok(updatedTestimonial);
+		try {
+			TestimonialDTO updatedTestimonial = testimonialService.updateTestimonial(uuid, testimonialDTO);
+			return ResponseEntity.ok(updatedTestimonial);
+		} catch (AccessDeniedException e) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError().build();
+		}
 	}
 
 	@DeleteMapping("/{uuid}")
 	public ResponseEntity<Void> deleteTestimonial(@PathVariable UUID uuid) {
-		testimonialService.deleteTestimonial(uuid);
-		return ResponseEntity.noContent().build();
+		try {
+			testimonialService.deleteTestimonial(uuid);
+			return ResponseEntity.noContent().build();
+		} catch (AccessDeniedException e) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError().build();
+		}
 	}
 	
 	// endpoint for video upload
@@ -84,7 +116,9 @@ public class TestimonialController {
             }
             TestimonialDTO updatedTestimonial = testimonialService.uploadTestimonialVideo(uuid, videoUrl);
             return ResponseEntity.ok(updatedTestimonial);
-        } catch (Exception e) {
+        } catch (AccessDeniedException e) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		} catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
     }

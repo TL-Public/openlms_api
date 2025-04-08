@@ -33,7 +33,7 @@ public class PlaylistService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public PlaylistDto createPlaylist(PlaylistDto playlistDto) {
         Playlist playlist = playlistMapper.toEntity(playlistDto);
         playlist.setUuid(UUID.randomUUID());
@@ -53,7 +53,6 @@ public class PlaylistService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public PlaylistDto getPlaylistByUuid(UUID uuid) {
         Playlist playlist = playlistDao.findByUuid(uuid)
                 .orElseThrow(() -> new PlaylistNotFoundException("Playlist not found with uuid: " + uuid));
@@ -61,7 +60,6 @@ public class PlaylistService {
     }
 
     @Transactional(readOnly = true)
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF', 'STATE_ADMIN', 'STATE_STAFF', 'RSETI_ADMIN', 'RSETI_STAFF', 'TRAINER', 'TRAINEE')")
     public List<PlaylistDto> getAllPlaylists() {
         return playlistDao.findAll().stream()
                 .map(playlistMapper::toDto)
@@ -69,7 +67,7 @@ public class PlaylistService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public PlaylistDto updatePlaylist(UUID uuid, PlaylistDto playlistDto) {
         Playlist existingPlaylist = playlistDao.findByUuid(uuid)
                 .orElseThrow(() -> new PlaylistNotFoundException("Playlist not found with uuid: " + uuid));
@@ -93,7 +91,7 @@ public class PlaylistService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public void deletePlaylist(UUID uuid) {
         Playlist playlist = playlistDao.findByUuid(uuid)
                 .orElseThrow(() -> new PlaylistNotFoundException("Playlist not found with uuid: " + uuid));
