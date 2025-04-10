@@ -1119,6 +1119,8 @@ public class CourseService {
             } else {
                 video = videoMapper.toEntity(videoDto);
                 video.setUuid(UUID.randomUUID());
+                video.setCreatedBy(user.getUsername());
+                video.setCreatedAt(ZonedDateTime.now());
             }
 
             video.setName(videoNode.get("displayname").asText());
