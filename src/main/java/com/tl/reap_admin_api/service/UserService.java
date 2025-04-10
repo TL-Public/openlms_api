@@ -115,11 +115,11 @@ public class UserService {
         profile.setUpdatedBy(getCurrentUser().getUsername());
         // Get the current user using this.getCurrentUser()
         User currentUser = this.getCurrentUser();
-        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
-        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
 
         user.setUserProfile(profile);
         checkUserReadPermission(user);
+        user.getUserProfile().setUpdatedBy(currentUser.getUsername());
+        user.getUserProfile().setUpdatedOn(ZonedDateTime.now());
 
         user = userDao.save(user);
         userProfileDao.save(profile);
