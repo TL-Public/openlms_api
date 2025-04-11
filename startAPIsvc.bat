@@ -1,1 +1,1 @@
-java  -jar .\target\reap-admin-api-1.jar
+"C:\Program Files\Eclipse Adoptium\jdk-17.0.12.7-hotspot\bin\java"  -jar .\target\openlms_admin_api-1.jar
