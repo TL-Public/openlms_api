@@ -818,116 +818,15 @@ public class CourseService {
         }
     }
 
-    @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
-    public VideoResponse addVideoToChapter(Course course, Chapter chapter, VideoDto videoDto) {
-        try {           
-
-            if (!chapter.getCourse().getId().equals(course.getId())) {
-                throw new IllegalArgumentException("Chapter does not belong to the specified course");
-            }
-
-            JsonNode videoNode = kPointService.checkAndUploadVideo(videoDto.getUrl(),course.getCourseCode(),videoDto.getLanguageCode());
-            if(videoNode == null)
-            {
-                throw new VideoNotFoundException("Video cannot be added to KPoint: " + videoDto.getUrl());
-            }
-            try {
-                // Check if a video with the same URL already exists
-                Optional<Video> existingVideo = videoDao.findByUrl(videoDto.getUrl());
-                Video video;
-                User user = userService.getCurrentUser();
-                int videoCreationStatus = 0;
-                int oldChapterSize = 0;
-                if (existingVideo.isPresent()) {
-                    video = existingVideo.get();
-                     boolean isInSameChapter = video.getChapterVideos().stream()
-                    .anyMatch(cv -> cv.getChapter().getId().equals(chapter.getId()));
-
-                    if (isInSameChapter && isVideoUnchanged(video, videoNode, videoDto.getOrderNumber())) {
-                        videoCreationStatus = 1;
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate video in the same chapter");
-                    }
-
-                    oldChapterSize = video.getChapterVideos().size();
-                    videoMapper.updateEntityFromDto(video, videoDto);
-                    updateVideoProperties(video, videoNode);
-                    videoCreationStatus = 2;
-                    System.out.println("\n\nVideo already exists in the database\n\n");     
-                } else {
-                    video = videoMapper.toEntity(videoDto);
-                    video.setUuid(UUID.randomUUID());
-                    video.setCreatedAt(ZonedDateTime.now());
-                    video.setCreatedBy(user.getUsername());
-                    video.setUpdatedAt(ZonedDateTime.now());
-                    video.setUpdatedBy(user.getUsername());
-                    updateVideoProperties(video, videoNode);
-                    videoCreationStatus = 3;
-                  
-                }
-               
-                // Check if the video is already associated with the chapter
-                Video finalVideo = video; // Create a final reference to video
-
-                // Check if the video is already associated with the chapter
-                ChapterVideo chapterVideo = video.getChapterVideos().stream()
-                .filter(cv -> cv.getVideo().getId().equals(finalVideo.getId()) && cv.getChapter().getId().equals(chapter.getId()))
-                .findFirst()
-                .orElseGet(() -> {
-                    System.out.println("\n\nVideoNOT ASSOCIATED WITH THE CHAPTER " + chapter.getUuid() +" -- " + finalVideo.getUuid());  
-                    ChapterVideo newChapterVideo = new ChapterVideo(chapter, finalVideo, videoDto.getOrderNumber());
-                    chapter.addChapterVideo(newChapterVideo);  
-                    finalVideo.addChapterVideo(newChapterVideo);  
-                    return newChapterVideo;
-                });
-
-                
-                // Update the order number
-                chapterVideo.setOrderNumber(videoDto.getOrderNumber());
-
-                video = videoDao.save(finalVideo);
-                chapterDao.save(chapter);
-           
-                // Add video to the course's channel playlist
-                Channel channel = getOrCreateChannel(course);
-                course.setChannel(channel);
-                Playlist playlist = getOrCreatePlaylist(channel, course.getCourseCode(), video.getLanguage().getCode());             
-                addVideoToPlaylist(playlist, video);
-                
-                  // Fetch the updated video with all associations
-                video = videoDao.findById(video.getId())
-                .orElseThrow(() -> new VideoNotFoundException("Video not found after saving"));
-
-                VideoDto newVideoDto = videoMapper.toDto(video);
-                newVideoDto.setOrderNumber(videoDto.getOrderNumber());
-               
-                if((videoCreationStatus == 2) && (oldChapterSize == video.getChapterVideos().size())) { //Exisiting videoupdated
-                    return new VideoResponse(HttpStatus.OK, newVideoDto, "Video updated successfully");
-                }
-                
-                return new VideoResponse(HttpStatus.CREATED, newVideoDto, "New video added successfully");
-            } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | ResponseStatusException e) {
-                throw e;
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new RuntimeException("Error adding video to chapter. Course: " + course.getCourseCode() + ", ChapterUUID: " + chapter.getUuid(), e);
-            }
-        } catch(IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.FAILED_DEPENDENCY, "Chapter does not belong to the specified course");
-        } catch(KPAddPlayListToChannelException | KPVideoUploadException |  KPPlaylistCreationException | KPChannleNotFoundException e) {
-            throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED, "Error adding video to chapter. Course: " + course.getCourseCode() + ", ChapterUUID: " + chapter.getUuid(), e);
-        } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | ResponseStatusException e) {
-            throw e;
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Outer exception Error adding video to chapter. Course: " + course.getCourseCode() + ", ChapterUUID: " + chapter.getUuid(), e);
-        }
-    }
+    
     
     @Transactional
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN', 'NAR_STAFF')")
     public VideoResponse addVideoToChapter(UUID courseUuid, UUID chapterUuid, VideoDto videoDto) {
         try {
+            // Log the start of the method for debugging
+            logger.debug("Starting addVideoToChapter with courseUuid: {}, chapterUuid: {}", courseUuid, chapterUuid);
+            
             Course course = courseDao.findByUuid(courseUuid)
                     .orElseThrow(() -> new CourseNotFoundException("Course not found with uuid: " + courseUuid));
             course.setUpdatedAt(ZonedDateTime.now());
@@ -941,122 +840,148 @@ public class CourseService {
                 throw new IllegalArgumentException("Chapter does not belong to the specified course");
             }
 
-            JsonNode videoNode = kPointService.checkAndUploadVideo(videoDto.getUrl(),course.getCourseCode(),videoDto.getLanguageCode());
-            if(videoNode == null)
-            {
-                throw new VideoNotFoundException("Video cannot be added to KPoint: " + videoDto.getUrl());
-            }
-            try {
-                // Check if a video with the same URL already exists
-                Optional<Video> existingVideo = videoDao.findByUrl(videoDto.getUrl());
-                Video video;
-                User user = userService.getCurrentUser();
-                int videoCreationStatus = 0;
-                int oldChapterSize = 0;
-                if (existingVideo.isPresent()) {
-                    video = existingVideo.get();
-                     boolean isInSameChapter = video.getChapterVideos().stream()
+            // Check if a video with the same URL already exists
+            Optional<Video> existingVideo = videoDao.findByUrl(videoDto.getUrl());
+            Video video;
+            int videoCreationStatus = 0;
+            int oldChapterSize = 0;
+            
+            if (existingVideo.isPresent()) {
+                video = existingVideo.get();
+                boolean isInSameChapter = video.getChapterVideos().stream()
                     .anyMatch(cv -> cv.getChapter().getId().equals(chapter.getId()));
 
-                    if (isInSameChapter && isVideoUnchanged(video, videoNode, videoDto.getOrderNumber())) {
-                        videoCreationStatus = 1;
-                        throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate video in the same chapter");
-                    }
-
-                    oldChapterSize = video.getChapterVideos().size();
-                    videoMapper.updateEntityFromDto(video, videoDto);
-                    updateVideoProperties(video, videoNode);
-                    videoCreationStatus = 2;
-                    System.out.println("\n\nVideo already exists in the database\n\n");     
-                } else {
-                    video = videoMapper.toEntity(videoDto);
-                    video.setUuid(UUID.randomUUID());
-                    video.setCreatedAt(ZonedDateTime.now());
-                    video.setCreatedBy(user.getUsername());
-                    video.setUpdatedAt(ZonedDateTime.now());
-                    video.setUpdatedBy(user.getUsername());
-                    updateVideoProperties(video, videoNode);
-                    videoCreationStatus = 3;
-                  
+                if (isInSameChapter && isVideoUnchanged(video, videoDto)) {
+                    videoCreationStatus = 1;
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate video in the same chapter");
                 }
-               
-                // Check if the video is already associated with the chapter
-                Video finalVideo = video; // Create a final reference to video
 
-                // Check if the video is already associated with the chapter
-                ChapterVideo chapterVideo = video.getChapterVideos().stream()
+                oldChapterSize = video.getChapterVideos().size();
+                
+                // Update video properties directly from DTO
+                if (videoDto.getName() != null && !videoDto.getName().isEmpty()) {
+                    video.setName(videoDto.getName());
+                } else {
+                    // Extract name from URL if not provided
+                    video.setName("YouTube Video: " + videoDto.getUrl());
+                }
+                
+                if (videoDto.getDescription() != null && !videoDto.getDescription().isEmpty()) {
+                    video.setDescription(videoDto.getDescription());
+                } else {
+                    video.setDescription("YouTube video from URL: " + videoDto.getUrl());
+                }
+                
+                // Set YouTube thumbnail
+                String youtubeId = extractYouTubeId(videoDto.getUrl());
+                if (!youtubeId.isEmpty()) {
+                    video.setThumbnail("https://img.youtube.com/vi/" + youtubeId + "/0.jpg");
+                }
+                
+                video.setUpdatedAt(ZonedDateTime.now());
+                video.setUpdatedBy(currentUser.getUsername());
+                videoCreationStatus = 2;
+            } else {
+                video = new Video();
+                video.setUuid(UUID.randomUUID());
+                video.setUrl(videoDto.getUrl());
+                video.setCreatedAt(ZonedDateTime.now());
+                video.setCreatedBy(currentUser.getUsername());
+                video.setUpdatedAt(ZonedDateTime.now());
+                video.setUpdatedBy(currentUser.getUsername());
+                
+                // Set video properties directly
+                if (videoDto.getName() != null && !videoDto.getName().isEmpty()) {
+                    video.setName(videoDto.getName());
+                } else {
+                    // Extract name from URL if not provided
+                    video.setName("YouTube Video: " + videoDto.getUrl());
+                }
+                
+                if (videoDto.getDescription() != null && !videoDto.getDescription().isEmpty()) {
+                    video.setDescription(videoDto.getDescription());
+                } else {
+                    video.setDescription("YouTube video from URL: " + videoDto.getUrl());
+                }
+                
+                // Set default values for YouTube videos
+                String youtubeId = extractYouTubeId(videoDto.getUrl());
+                video.setThumbnail("https://youtu.be/FoUNRh2-Q5o?si=tgU5VSKE2rrziC3Y" + youtubeId + "/0.jpg");
+                video.setDuration(0); // Duration unknown initially
+                video.setStatus(1); // Active status
+                
+                // Set language if provided
+                if (videoDto.getLanguageCode() != null) {
+                    Language language = languageService.getLanguageByCode(videoDto.getLanguageCode());
+                    video.setLanguage(language);
+                }
+                
+                videoCreationStatus = 3;
+            }
+            
+            // Check if the video is already associated with the chapter
+            Video finalVideo = video; // Create a final reference to video
+
+            // Check if the video is already associated with the chapter
+            ChapterVideo chapterVideo = video.getChapterVideos().stream()
                 .filter(cv -> cv.getVideo().getId().equals(finalVideo.getId()) && cv.getChapter().getId().equals(chapter.getId()))
                 .findFirst()
                 .orElseGet(() -> {
-                    System.out.println("\n\nVideoNOT ASSOCIATED WITH THE CHAPTER " + chapter.getUuid() +" -- " + finalVideo.getUuid());  
+                    logger.debug("Creating new ChapterVideo association");
                     ChapterVideo newChapterVideo = new ChapterVideo(chapter, finalVideo, videoDto.getOrderNumber());
                     chapter.addChapterVideo(newChapterVideo);  
                     finalVideo.addChapterVideo(newChapterVideo);  
                     return newChapterVideo;
                 });
 
-                
-                // Update the order number
-                chapterVideo.setOrderNumber(videoDto.getOrderNumber());
+            // Update the order number
+            chapterVideo.setOrderNumber(videoDto.getOrderNumber());
 
-                video = videoDao.save(finalVideo);
-                chapterDao.save(chapter);
-           
-                // Add video to the course's channel playlist
-                Channel channel = getOrCreateChannel(course);
-                Playlist playlist = getOrCreatePlaylist(channel, course.getCourseCode(), video.getLanguage().getCode());             
-                addVideoToPlaylist(playlist, video);
-                
-                  // Fetch the updated video with all associations
-                video = videoDao.findById(video.getId())
+            logger.debug("Saving video and chapter");
+            video = videoDao.save(finalVideo);
+            chapterDao.save(chapter);
+            
+            // Fetch the updated video with all associations
+            video = videoDao.findById(video.getId())
                 .orElseThrow(() -> new VideoNotFoundException("Video not found after saving"));
 
-                VideoDto newVideoDto = videoMapper.toDto(video);
-                newVideoDto.setOrderNumber(videoDto.getOrderNumber());
-               
-                if((videoCreationStatus == 2) && (oldChapterSize == video.getChapterVideos().size())) { //Exisiting videoupdated
-                    return new VideoResponse(HttpStatus.OK, newVideoDto, "Video updated successfully");
-                }
-                
-                return new VideoResponse(HttpStatus.CREATED, newVideoDto, "New video added successfully");
-            } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | ResponseStatusException e) {
-                throw e;
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new RuntimeException("Error adding video to chapter. CourseUUID: " + courseUuid + ", ChapterUUID: " + chapterUuid, e);
+            VideoDto newVideoDto = videoMapper.toDto(video);
+            newVideoDto.setOrderNumber(videoDto.getOrderNumber());
+            
+            if((videoCreationStatus == 2) && (oldChapterSize == video.getChapterVideos().size())) { //Existing video updated
+                return new VideoResponse(HttpStatus.OK, newVideoDto, "Video updated successfully");
             }
+            
+            return new VideoResponse(HttpStatus.CREATED, newVideoDto, "New video added successfully");
         } catch(IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.FAILED_DEPENDENCY, "Chapter does not belong to the specified course");
-        } catch(KPAddPlayListToChannelException | KPVideoUploadException |  KPPlaylistCreationException | KPChannleNotFoundException e) {
-            throw new ResponseStatusException(HttpStatus.PRECONDITION_FAILED, "Error adding video to chapter. CourseUUID: " + courseUuid + ", ChapterUUID: " + chapterUuid, e);
         } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error adding video to chapter", e);
             throw new RuntimeException("Error adding video to chapter. CourseUUID: " + courseUuid + ", ChapterUUID: " + chapterUuid, e);
         }
     }
 
-    private boolean isVideoUnchanged(Video video, JsonNode videoNode, Integer orderNumber) {
-        return video.getName().equals(videoNode.get("displayname").asText()) &&
-               video.getDescription().equals(videoNode.get("description").asText()) &&
-               video.getThumbnail().equals(videoNode.get("images").get("thumb").asText()) &&
-               video.getDuration().equals(videoNode.get("published_duration").asInt()) &&
-               video.getExtId().equals(videoNode.get("id").asText()) &&
-               video.getStatus().equals(videoNode.get("status").asText()) &&
+    private boolean isVideoUnchanged(Video video, VideoDto videoDto) {
+        return video.getName().equals(videoDto.getName() != null ? videoDto.getName() : "YouTube Video: " + videoDto.getUrl()) &&
+               video.getDescription().equals(videoDto.getDescription() != null ? videoDto.getDescription() : "YouTube video from URL: " + videoDto.getUrl()) &&
                video.getChapterVideos().stream()
-                       .anyMatch(cv -> cv.getVideo().getId().equals(video.getId()) && cv.getOrderNumber().equals(orderNumber));
+                       .anyMatch(cv -> cv.getOrderNumber().equals(videoDto.getOrderNumber()));
     }
 
-    private void updateVideoProperties(Video video, JsonNode videoNode) {
-        video.setName(videoNode.get("displayname").asText());
-        video.setDescription(videoNode.get("description").asText());
-        video.setThumbnail(videoNode.get("images").get("thumb").asText());
-        video.setDuration(videoNode.get("published_duration").asInt());
-        video.setExtId(videoNode.get("id").asText());
-        video.setStatus(videoNode.get("status").asInt());
-        video.setUpdatedAt(ZonedDateTime.now());
-        video.setUpdatedBy(userService.getCurrentUser().getUsername());
+    private String extractYouTubeId(String url) {
+        if (url == null || url.isEmpty()) {
+            return "";
+        }
+    
+        String pattern = "(?<=watch\\?v=|/videos/|embed\\/|youtu.be\\/|\\/v\\/|\\/e\\/|watch\\?v%3D|watch\\?feature=player_embedded&v=|%2Fvideos%2F|embed%\u200C\u200B2F|youtu.be%2F|%2Fv%2F)[^#\\&\\?\\n]*";
+        java.util.regex.Pattern compiledPattern = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher matcher = compiledPattern.matcher(url);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return "";
     }
     
     private Channel getOrCreateChannel(Course course) {
@@ -1098,22 +1023,18 @@ public class CourseService {
         }
     }
 
+    // Also replace the addVideoToCourse method to bypass KPoint
     @Transactional
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'NAR_ADMIN')")
     public VideoDto addVideoToCourse(Course course, Channel channel, VideoDto videoDto) {
-        
-
-        //System.out.println("\n\nvideoDto.getUrl() - " + videoDto.getUrl() + " - " + videoDto.getLanguageCode());
-        JsonNode videoNode = kPointService.checkAndUploadVideo(videoDto.getUrl(),course.getCourseCode(),videoDto.getLanguageCode());
-        if(videoNode == null)
-        {        
-            throw new VideoNotFoundException("Video not found with url in video service: " + videoDto.getUrl());
-        }
         try {
+            logger.debug("Adding video to course: {}, URL: {}", course.getCourseCode(), videoDto.getUrl());
+            
             // Check if a video with the same URL already exists
             Optional<Video> existingVideo = videoDao.findByUrl(videoDto.getUrl());
             Video video;
             User user = userService.getCurrentUser();
+            
             if (existingVideo.isPresent()) {
                 video = existingVideo.get();     
             } else {
@@ -1123,41 +1044,58 @@ public class CourseService {
                 video.setCreatedAt(ZonedDateTime.now());
             }
 
-            video.setName(videoNode.get("displayname").asText());
-            video.setDescription(videoNode.get("description").asText());
-            video.setThumbnail(videoNode.get("images").get("thumb").asText());
-            video.setDuration(videoNode.get("published_duration").asInt());
-            video.setExtId(videoNode.get("id").asText());
-            video.setStatus(videoNode.get("status").asInt());
+            // Extract YouTube video details directly
+            String youtubeId = extractYouTubeId(videoDto.getUrl());
+            String videoName = videoDto.getName() != null && !videoDto.getName().isEmpty() 
+                ? videoDto.getName() 
+                : "YouTube Video: " + videoDto.getUrl();
+            String videoDesc = videoDto.getDescription() != null && !videoDto.getDescription().isEmpty()
+                ? videoDto.getDescription()
+                : "YouTube video from URL: " + videoDto.getUrl();
+            
+            video.setName(videoName);
+            video.setDescription(videoDesc);
+            video.setThumbnail("https://img.youtube.com/vi/" + youtubeId + "/0.jpg");
+            video.setDuration(0); // Duration unknown initially
+            video.setExtId(youtubeId); // Use YouTube ID as external ID
+            video.setStatus(1); // Active status
           
             video.setUpdatedAt(ZonedDateTime.now());
-            video.setUpdatedBy(user.getUsername()); // Replace with actual user when authentication is implemented
+            video.setUpdatedBy(user.getUsername());
+            
+            // Set language if provided
+            if (videoDto.getLanguageCode() != null) {
+                Language language = languageService.getLanguageByCode(videoDto.getLanguageCode());
+                video.setLanguage(language);
+            }
+            
             video = videoDao.save(video);
 
-            Video finalVideo = video; // Create a final reference to video
-            String finalVideoLanguageCode = video.getLanguage().getCode();
-            course.getTranslations().stream()
-            .filter(translation -> translation.getLanguageCode().equals(finalVideoLanguageCode))
-            .findFirst()
-            .ifPresentOrElse(translation -> {                
-                //System.out.println("Video already exists in the course");
-                translation.setAboutVideoExtid(finalVideo.getExtId());
-                translation.setAboutVideoUrl(finalVideo.getUrl());
-            },
-            () -> {
-                //System.out.println("Translation doesnot exists in the course");               
-            });
-
-
+            // Update course translation if needed
+            Video finalVideo = video;
+            String finalVideoLanguageCode = video.getLanguage() != null ? video.getLanguage().getCode() : null;
             
-            Playlist playlist = getOrCreatePlaylist(channel, course.getCourseCode(), video.getLanguage().getCode());             
-            addVideoToPlaylist(playlist, video);
-           
+            if (finalVideoLanguageCode != null) {
+                course.getTranslations().stream()
+                    .filter(translation -> translation.getLanguageCode().equals(finalVideoLanguageCode))
+                    .findFirst()
+                    .ifPresent(translation -> {
+                        translation.setAboutVideoExtid(finalVideo.getExtId());
+                        translation.setAboutVideoUrl(finalVideo.getUrl());
+                    });
+            }
+
+            // Add to playlist if channel exists
+            if (channel != null) {
+                Playlist playlist = getOrCreatePlaylist(channel, course.getCourseCode(), 
+                    finalVideoLanguageCode != null ? finalVideoLanguageCode : "en");
+                addVideoToPlaylist(playlist, video);
+            }
 
             return videoMapper.toDto(video);
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("Error adding video to chapter. Course: " + course.getCourseCode(), e);
+            logger.error("Error adding video to course", e);
+            throw new RuntimeException("Error adding video to course. Course: " + course.getCourseCode(), e);
         }
     }
 
@@ -1377,7 +1315,7 @@ public class CourseService {
             videoDto.setOrderNumber(orderNo);
         
             // Upload video and add to chapter
-            VideoResponse response = addVideoToChapter(course, chapter, videoDto);
+            VideoResponse response = addVideoToChapter(course.getUuid(), chapter.getUuid(), videoDto);
             if (response.getStatus() != HttpStatus.CREATED && response.getStatus() != HttpStatus.OK) {
                 errors.put("Row " + (row.getRowNum() + 1), "Failed to upload video: " + response.getVideo().getUrl());
             } else {

@@ -353,9 +353,7 @@ public class CourseController {
             return new ResponseEntity<>(HttpStatus.FORBIDDEN);
         } catch (ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode()).body(e.getReason());
-        } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException | 
-                KPAddPlayListToChannelException | KPVideoUploadException | KPPlaylistCreationException | 
-                KPChannleNotFoundException e) {
+        } catch (CourseNotFoundException | ChapterNotFoundException | VideoNotFoundException  e) {
 
             String className = e.getClass().getSimpleName();
 
